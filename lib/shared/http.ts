@@ -1,5 +1,5 @@
-// Shared by the dashboard, the edge functions and the embed. Keep this module
-// free of Node-, Deno- and Next-specific APIs: Web-standard globals only.
+// lib/shared/ must load in the dashboard, the edge functions and the embed, so
+// use Web-standard globals only: no Node-, Deno- or Next-specific APIs.
 
 export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
