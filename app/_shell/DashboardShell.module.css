@@ -1,0 +1,69 @@
+.rail {
+  width: 56px;
+  flex: none;
+  height: 100%;
+  border-right: 1px solid var(--mantine-color-gray-3);
+}
+
+.logoTile {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-drkRed-6);
+}
+
+.railItem {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-gray-6);
+
+  &:hover {
+    background: var(--mantine-color-gray-1);
+  }
+
+  &[aria-current="page"] {
+    background: var(--mantine-color-drkRed-0);
+    color: var(--mantine-color-drkRed-6);
+  }
+}
+
+.sidebar {
+  height: 100%;
+}
+
+.sidebarHeader {
+  height: 48px;
+  padding: 0 var(--mantine-spacing-xs) 0 var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--mantine-color-gray-3);
+}
+
+.sidebarItem {
+  height: 32px;
+  border-radius: var(--mantine-radius-sm);
+
+  &[data-active] {
+    background: var(--mantine-color-gray-1);
+    color: inherit;
+    font-weight: 500;
+  }
+}
+
+.sectionLabel {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px var(--mantine-spacing-sm);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mantine-color-gray-6);
+}
