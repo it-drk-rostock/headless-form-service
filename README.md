@@ -12,7 +12,7 @@ Link the CLI once per machine:
 
 ```bash
 npx supabase login
-npx supabase link --project-ref <project-ref>
+npx supabase link --project-ref qhjysorczroizpgmagpp
 ```
 
 ### Edge function test seam
