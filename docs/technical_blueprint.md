@@ -243,7 +243,7 @@ There is a single cloud environment ([ADR-0006](./adr/0006-single-cloud-environm
 
 | Secret | Used by |
 | :--- | :--- |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Dashboard |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Dashboard |
 | `SUPABASE_SERVICE_ROLE_KEY` | Edge functions; dashboard server only for admin operations (invites, set-password links) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | `/load-form`, `/submit-form` |
 | `QSTASH_TOKEN` | `/submit-form`, dashboard server (retry from DLQ) |
@@ -252,7 +252,7 @@ There is a single cloud environment ([ADR-0006](./adr/0006-single-cloud-environm
 | `TURNSTILE_SECRET_KEY` | `/submit-form` |
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | `/dispatch-email` |
 | `N8N_INTEGRATION_KEY` | `/generate-form-pass` |
-| IONOS SMTP credentials | Supabase Auth settings |
+| `SUPABASE_AUTH_SMTP_USER`, `SUPABASE_AUTH_SMTP_PASS`, `SUPABASE_AUTH_SMTP_ADMIN_EMAIL` (IONOS) | Supabase Auth settings, set via `supabase config push` |
 
 Open: the sender domain and address (`.scratch/sender-domain/spec.md`). A SurveyJS Creator commercial licence is to be bought before production use (development runs with the licence notice).
 

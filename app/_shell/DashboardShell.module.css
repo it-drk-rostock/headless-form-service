@@ -4,16 +4,6 @@
   border-right: 1px solid var(--mantine-color-gray-3);
 }
 
-.logoTile {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--mantine-radius-md);
-  background: var(--mantine-color-drkRed-6);
-}
-
 .railItem {
   width: 36px;
   height: 36px;

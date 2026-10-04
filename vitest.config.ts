@@ -6,6 +6,7 @@ export default defineConfig({
       "app/**/*.test.ts",
       "lib/**/*.test.ts",
       "supabase/functions/**/*.test.ts",
+      "supabase/tests/**/*.test.ts",
     ],
     environment: "node",
   },

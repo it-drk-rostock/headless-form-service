@@ -7,6 +7,7 @@ import { IconRail } from "./IconRail.tsx";
 import { ModuleSidebar } from "./ModuleSidebar.tsx";
 import { activeModule } from "./navigation.ts";
 import { TopBar } from "./TopBar.tsx";
+import type { ShellUser } from "./UserMenu.tsx";
 
 const RAIL_WIDTH = 56;
 const SIDEBAR_WIDTH = 248;
@@ -18,7 +19,13 @@ const SIDEBAR_INLINE_FROM = em(992);
  * sidebar, breadcrumb top bar. Below `md` the sidebar moves into a drawer and
  * only the rail stays.
  */
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+export function DashboardShell({
+  user,
+  children,
+}: {
+  user: ShellUser;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const currentModule = activeModule(pathname);
   const sidebarInline = useMediaQuery(`(min-width: ${SIDEBAR_INLINE_FROM})`);
@@ -50,7 +57,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </AppShell.Header>
       <AppShell.Navbar>
         <Box display="flex" h="100%">
-          <IconRail activeId={currentModule?.id} width={RAIL_WIDTH} />
+          <IconRail
+            activeId={currentModule?.id}
+            width={RAIL_WIDTH}
+            user={user}
+          />
           {sidebarOpen && (
             <Box visibleFrom="md" w={SIDEBAR_WIDTH}>
               <ModuleSidebar {...sidebarProps} onHide={sidebar.close} />
