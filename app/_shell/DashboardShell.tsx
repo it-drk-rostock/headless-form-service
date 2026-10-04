@@ -1,7 +1,7 @@
 "use client";
 
-import { AppShell, Box, Drawer } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { AppShell, Box, Drawer, em } from "@mantine/core";
+import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { usePathname } from "next/navigation";
 import { IconRail } from "./IconRail.tsx";
 import { ModuleSidebar } from "./ModuleSidebar.tsx";
@@ -10,6 +10,8 @@ import { TopBar } from "./TopBar.tsx";
 
 const RAIL_WIDTH = 56;
 const SIDEBAR_WIDTH = 248;
+// Mantine's default `md` breakpoint: below it the sidebar lives in a drawer.
+const SIDEBAR_INLINE_FROM = em(992);
 
 /**
  * Monospace-style shell (docs/ui-design.md §4): icon rail, collapsible module
@@ -18,15 +20,13 @@ const SIDEBAR_WIDTH = 248;
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const module = activeModule(pathname);
+  const currentModule = activeModule(pathname);
+  const sidebarInline = useMediaQuery(`(min-width: ${SIDEBAR_INLINE_FROM})`);
   const [sidebarOpen, sidebar] = useDisclosure(true);
   const [drawerOpen, drawer] = useDisclosure(false);
 
-  const showSidebar = () => {
-    sidebar.open();
-    drawer.open();
-  };
-  const sidebarProps = { activeId: module?.id, pathname };
+  const showSidebar = () => (sidebarInline ? sidebar.open() : drawer.open());
+  const sidebarProps = { activeId: currentModule?.id, pathname };
 
   return (
     <AppShell
@@ -43,14 +43,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     >
       <AppShell.Header>
         <TopBar
-          module={module}
+          module={currentModule}
           sidebarHidden={!sidebarOpen}
           onShowSidebar={showSidebar}
         />
       </AppShell.Header>
       <AppShell.Navbar>
         <Box display="flex" h="100%">
-          <IconRail activeId={module?.id} />
+          <IconRail activeId={currentModule?.id} width={RAIL_WIDTH} />
           {sidebarOpen && (
             <Box visibleFrom="md" w={SIDEBAR_WIDTH}>
               <ModuleSidebar {...sidebarProps} onHide={sidebar.close} />

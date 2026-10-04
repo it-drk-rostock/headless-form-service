@@ -73,7 +73,7 @@ export function ModuleSidebar({
               onClick={onNavigate}
             />
             <SidebarSection label={t("nav.sectionTeams")}>
-              <Text c="gray.6" px="sm" py={6}>
+              <Text c="gray.6" px="sm" py={8}>
                 {t("nav.noTeams")}
               </Text>
             </SidebarSection>

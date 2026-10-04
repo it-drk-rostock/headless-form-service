@@ -1,5 +1,4 @@
 .rail {
-  width: 56px;
   flex: none;
   height: 100%;
   border-right: 1px solid var(--mantine-color-gray-3);
@@ -39,7 +38,7 @@
 }
 
 .sidebarHeader {
-  height: 48px;
+  height: var(--app-shell-header-height);
   padding: 0 var(--mantine-spacing-xs) 0 var(--mantine-spacing-md);
   border-bottom: 1px solid var(--mantine-color-gray-3);
 }
@@ -47,6 +46,10 @@
 .sidebarItem {
   height: 32px;
   border-radius: var(--mantine-radius-sm);
+
+  &:hover {
+    background: var(--mantine-color-gray-1);
+  }
 
   &[data-active] {
     background: var(--mantine-color-gray-1);

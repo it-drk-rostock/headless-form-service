@@ -12,12 +12,19 @@ const moduleIcons: Record<ModuleId, typeof IconForms> = {
   teams: IconUsersGroup,
 };
 
-export function IconRail({ activeId }: { activeId: ModuleId | undefined }) {
+export function IconRail({
+  activeId,
+  width,
+}: {
+  activeId: ModuleId | undefined;
+  width: number;
+}) {
   return (
     <Stack
       component="nav"
       aria-label={t("nav.mainLabel")}
       className={classes.rail}
+      w={width}
       align="center"
       gap="xs"
       py="sm"

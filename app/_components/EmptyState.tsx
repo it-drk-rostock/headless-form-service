@@ -16,7 +16,9 @@ export function EmptyState({
         {icon}
       </ThemeIcon>
       <Title order={2}>{title}</Title>
-      <Text c="gray.6">{hint}</Text>
+      <Text c="gray.6" fz={13}>
+        {hint}
+      </Text>
     </Stack>
   );
 }

@@ -14,7 +14,7 @@ export function ContentPanel({
       radius="md"
       m="md"
       p="lg"
-      mih="calc(100dvh - 48px - 2 * var(--mantine-spacing-md))"
+      mih="calc(100dvh - var(--app-shell-header-height) - 2 * var(--mantine-spacing-md))"
     >
       <Title order={1}>{title}</Title>
       {children}
