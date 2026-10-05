@@ -1,6 +1,10 @@
 /** Mirrors the `public.team_role` enum. */
 export type TeamRole = "team_admin" | "member";
 
+export function isTeamRole(role: string): role is TeamRole {
+  return role === "team_admin" || role === "member";
+}
+
 /** A team as navigation and lists show it. */
 export type TeamSummary = {
   id: string;

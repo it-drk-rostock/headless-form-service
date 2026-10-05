@@ -9,7 +9,7 @@ A group of staff (typically a department) that owns forms and is the boundary of
 _Avoid_: Workspace, tenant, organisation
 
 **Team Admin**:
-A team member who can additionally invite other people into their team.
+A team member who can additionally manage who is in their team: invite people, change their roles, remove them, and send them a new set-password link.
 
 **Team Member**:
 A person belonging to a team who can create, edit and publish that team's forms.

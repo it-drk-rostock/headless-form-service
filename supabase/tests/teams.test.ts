@@ -221,15 +221,14 @@ describe("team members", () => {
         "insert into public.team_members (team_id, user_id) values ($1, $2)",
         [await team("Blutspende"), anna],
       ),
-    ).rejects.toThrow(/permission denied/);
-    await expect(
-      queryAs(
-        db,
-        { userId: anna },
-        "update public.team_members set role = 'team_admin' where user_id = $1",
-        [anna],
-      ),
-    ).rejects.toThrow(/permission denied/);
+    ).rejects.toThrow(/row-level security/);
+    const promoted = await queryAs(
+      db,
+      { userId: anna },
+      "update public.team_members set role = 'team_admin' where user_id = $1 returning role",
+      [anna],
+    );
+    expect(promoted).toEqual([]);
   });
 });
 
@@ -246,5 +245,12 @@ describe("manual RLS checklist", () => {
     await db.exec(`create policy "leak" on public.teams for select
       to authenticated using (true)`);
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 1 failed/);
+  });
+
+  it("catches a team that can lose its last Team Admin", async () => {
+    await db.exec(
+      "drop trigger team_members_keep_last_team_admin on public.team_members",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 14 failed/);
   });
 });

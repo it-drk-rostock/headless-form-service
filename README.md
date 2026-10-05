@@ -74,7 +74,7 @@ Do not use *Send invitation* in this setup. Built-in SMTP sends Supabase's defau
 
 Do this once, before the first real staff member is invited:
 
-1. **Deploy the dashboard.** Fill `.env.local` (it is read at build time), then run `npx wrangler login` and `npm run deploy` (see "Deploy to Cloudflare"). Note the dashboard URL.
+1. **Deploy the dashboard.** Fill `.env.local` (it is read at build time), then run `npx wrangler login` and `npm run deploy` (see "Deploy to Cloudflare"). Set the service-role key as a Worker secret with `npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY`; without it, inviting and set-password links fail. Note the dashboard URL.
 2. **Point auth links at it.** In `supabase/config.toml`, set `site_url` to the dashboard URL and add `"<dashboard URL>/**"` to `additional_redirect_urls`. Keep `http://localhost:3000/**` if you still want local logins to work. Commit the change.
 3. **Push the auth settings with IONOS SMTP.** Set the credentials in your shell; they never go in the repo. Check the diff: it should list only auth settings, the SMTP block and the email templates. Then push:
 
@@ -102,6 +102,17 @@ Run this once, after `npm run db:push` and after the person has an account (crea
 ### Teams
 
 `public.teams` and `public.team_members` hold who belongs to which team, with one role per team (`team_admin` or `member`). RLS lets people see only their own teams and memberships. Super Admins see all teams, and only they can create and rename teams. After a migration that touches team access, run `supabase/snippets/rls-checklist-teams.sql` in the SQL editor. It checks the rules as different people on throwaway test data, then rolls back. `npm test` runs the same checklist against the migrations.
+
+### Members
+
+Team Admins manage their own team's members on `/teams/[id]`, and Super Admins manage every team's: invite by email, change roles, remove members, and send a set-password link. Everyone else in the team sees the member list without these actions.
+
+- Inviting an address without an account creates the account and sends Supabase Auth's invite email. An existing account is added to the team without an email.
+- A set-password link is Supabase Auth's recovery email (`supabase/templates/recovery.html`).
+- A team cannot lose its last Team Admin. A database trigger refuses it, unless a Super Admin makes the change.
+- Inviting and set-password links need `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` (see `.env.example`). Only `lib/supabase/admin.ts` reads it. That file is server-only, and the actions check that the caller may manage the team before they use the key. All membership changes run as the signed-in person, so RLS has the final say.
+
+In the "Current setup: local testing" mode, the emails come from Supabase's built-in SMTP with Supabase's default templates. Those links do not go through `/auth/confirm`, so a newly invited person cannot set a password yet. Adding existing accounts and changing roles work. Invites and set-password links work end to end only after "Going live", step 3.
 
 ### Deploy to Cloudflare
 

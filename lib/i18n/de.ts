@@ -89,4 +89,68 @@ export const de = {
     "Nur Super Admins dürfen Teams anlegen und umbenennen.",
   "teams.errorGeneric":
     "Das Team konnte nicht gespeichert werden. Bitte erneut versuchen.",
+
+  "members.title": "Mitglieder",
+  "members.empty": "Dieses Team hat noch keine Mitglieder.",
+  "members.noTeamAdmin":
+    "Dieses Team hat keinen Team-Admin. Nur Super Admins können seine Mitglieder verwalten.",
+  "members.columnName": "Name",
+  "members.columnEmail": "E-Mail-Adresse",
+  "members.columnRole": "Rolle",
+  "members.columnSince": "Mitglied seit",
+  "members.you": "Sie",
+  "members.actionsLabel": "Aktionen für {name}",
+  "members.invite": "Mitglied einladen",
+  "members.inviteTitle": "Mitglied einladen",
+  "members.inviteIntro":
+    "Gibt es noch kein Konto mit dieser Adresse, wird eines angelegt und eine Einladung per E-Mail gesendet. Bestehende Konten werden ohne E-Mail hinzugefügt.",
+  "members.email": "E-Mail-Adresse",
+  "members.fullName": "Name",
+  "members.fullNameHint":
+    "Optional. Wird nur für neue Konten übernommen und in der Mitgliederliste angezeigt.",
+  "members.role": "Rolle",
+  "members.roleHint.team_admin":
+    "Kann Mitglieder einladen, Rollen ändern, Mitglieder entfernen und Links zum Passwort senden.",
+  "members.roleHint.member": "Kann die Formulare des Teams bearbeiten.",
+  "members.inviteSubmit": "Einladen",
+  "members.invited": "Die Einladung wurde an {email} gesendet.",
+  "members.added":
+    "{email} hat bereits ein Konto und wurde ohne E-Mail zum Team hinzugefügt.",
+  "members.inviteAnother": "Weitere Person einladen",
+  "members.cancel": "Abbrechen",
+  "members.done": "Schließen",
+  "members.makeAdmin": "Zum Team-Admin machen",
+  "members.makeAdminText":
+    "{name} kann dann Mitglieder dieses Teams einladen, Rollen ändern und Mitglieder entfernen.",
+  "members.makeMember": "Zum Mitglied machen",
+  "members.makeMemberText":
+    "{name} kann dann keine Mitglieder dieses Teams mehr verwalten.",
+  "members.sendPasswordLink": "Link zum Passwort senden",
+  "members.sendPasswordLinkText":
+    "{email} erhält eine E-Mail mit einem Link, über den ein neues Passwort festgelegt wird. Der Link ist 24 Stunden gültig. Das bisherige Passwort bleibt gültig, bis ein neues festgelegt ist.",
+  "members.sendPasswordLinkSubmit": "Link senden",
+  "members.passwordLinkSent": "Der Link wurde an {email} gesendet.",
+  "members.remove": "Aus dem Team entfernen",
+  "members.removeText":
+    "{name} verliert den Zugriff auf dieses Team und seine Formulare. Das Konto bleibt bestehen.",
+  "members.removeSelfText":
+    "Sie verlieren damit selbst den Zugriff auf dieses Team und seine Formulare.",
+  "members.removeSubmit": "Entfernen",
+  "members.lastAdminBlocked":
+    "{name} ist der letzte Team-Admin. Ein Team braucht mindestens einen Team-Admin, machen Sie also zuerst jemand anderen zum Team-Admin.",
+  "members.lastAdminOverride":
+    "{name} ist der letzte Team-Admin. Danach hat das Team keinen Team-Admin mehr, und nur Super Admins können seine Mitglieder verwalten.",
+  "members.errorEmailMissing": "Bitte eine E-Mail-Adresse eingeben.",
+  "members.errorEmailInvalid": "Bitte eine gültige E-Mail-Adresse eingeben.",
+  "members.errorFullNameTooLong":
+    "Der Name darf höchstens {max} Zeichen lang sein.",
+  "members.errorAlreadyMember": "{email} ist bereits Mitglied dieses Teams.",
+  "members.errorForbidden":
+    "Nur Team-Admins dieses Teams und Super Admins dürfen Mitglieder verwalten.",
+  "members.errorNotMember": "Diese Person ist nicht (mehr) Mitglied des Teams.",
+  "members.errorLastTeamAdmin":
+    "Ein Team braucht mindestens einen Team-Admin. Machen Sie zuerst jemand anderen zum Team-Admin.",
+  "members.errorTooManyEmails":
+    "Gerade wurden zu viele E-Mails gesendet. Bitte in einigen Minuten erneut versuchen.",
+  "members.errorGeneric": "Das hat nicht geklappt. Bitte erneut versuchen.",
 } as const satisfies Record<string, string>;

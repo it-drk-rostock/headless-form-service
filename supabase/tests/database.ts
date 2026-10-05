@@ -80,3 +80,35 @@ export async function createAuthUser(
   );
   return rows[0].id;
 }
+
+export async function createSuperAdmin(
+  db: PGlite,
+  email: string,
+): Promise<string> {
+  const id = await createAuthUser(db, email);
+  await db.query(
+    "update public.profiles set is_super_admin = true where id = $1",
+    [id],
+  );
+  return id;
+}
+
+export async function createTeam(db: PGlite, name: string): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    "insert into public.teams (name) values ($1) returning id",
+    [name],
+  );
+  return rows[0].id;
+}
+
+export async function addTeamMember(
+  db: PGlite,
+  teamId: string,
+  userId: string,
+  role: "team_admin" | "member" = "member",
+): Promise<void> {
+  await db.query(
+    "insert into public.team_members (team_id, user_id, role) values ($1, $2, $3)",
+    [teamId, userId, role],
+  );
+}

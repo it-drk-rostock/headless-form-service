@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams (ticket 04). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams and memberships (tickets 04, 05). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 9 of 9 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 15 of 15 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -38,6 +38,8 @@ select set_config('request.jwt.claims',
   '{"role":"authenticated","sub":"00000000-0000-4000-8000-00000000c003"}', true);
 
 do $$
+declare
+  changed int;
 begin
   -- 1. A member sees only their own teams.
   if (select array_agg(id) from public.teams)
@@ -59,6 +61,27 @@ begin
     raise exception 'RLS check 3 failed: Member A joined team B';
   exception when insufficient_privilege then null;
   end;
+
+  -- 10. A member cannot promote themselves or remove anyone.
+  update public.team_members set role = 'team_admin'
+  where user_id = '00000000-0000-4000-8000-00000000c003';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 10 failed: Member A promoted themselves';
+  end if;
+  delete from public.team_members
+  where team_id = '00000000-0000-4000-8000-0000000000a1';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 10 failed: Member A removed members';
+  end if;
+
+  -- 11. A member sees the profiles of their teammates, and no others.
+  if (select array_agg(id order by id) from public.profiles)
+     is distinct from array['00000000-0000-4000-8000-00000000c002'::uuid,
+                            '00000000-0000-4000-8000-00000000c003'::uuid] then
+    raise exception 'RLS check 11 failed: Member A sees profiles outside team A';
+  end if;
 end $$;
 
 -- As Member B ---------------------------------------------------------------
@@ -102,6 +125,46 @@ begin
     raise exception 'RLS check 6 failed: the Team Admin created a team';
   exception when insufficient_privilege then null;
   end;
+
+  -- 12. A Team Admin manages roles in their own team.
+  update public.team_members set role = 'team_admin'
+  where team_id = '00000000-0000-4000-8000-0000000000a1'
+    and user_id = '00000000-0000-4000-8000-00000000c003';
+  get diagnostics changed = row_count;
+  if changed <> 1 then
+    raise exception 'RLS check 12 failed: the Team Admin could not promote Member A';
+  end if;
+  update public.team_members set role = 'member'
+  where team_id = '00000000-0000-4000-8000-0000000000a1'
+    and user_id = '00000000-0000-4000-8000-00000000c003';
+
+  -- 13. A Team Admin cannot add to, change or remove from another team.
+  begin
+    insert into public.team_members (team_id, user_id) values
+      ('00000000-0000-4000-8000-0000000000b1', '00000000-0000-4000-8000-00000000c003');
+    raise exception 'RLS check 13 failed: the Team Admin added someone to team B';
+  exception when insufficient_privilege then null;
+  end;
+  delete from public.team_members
+  where team_id = '00000000-0000-4000-8000-0000000000b1';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 13 failed: the Team Admin removed members of team B';
+  end if;
+
+  -- 14. The last Team Admin cannot step down or leave.
+  begin
+    update public.team_members set role = 'member'
+    where user_id = '00000000-0000-4000-8000-00000000c002';
+    raise exception 'RLS check 14 failed: the last Team Admin of team A stepped down';
+  exception when sqlstate 'HF001' then null;
+  end;
+  begin
+    delete from public.team_members
+    where user_id = '00000000-0000-4000-8000-00000000c002';
+    raise exception 'RLS check 14 failed: the last Team Admin of team A left';
+  exception when sqlstate 'HF001' then null;
+  end;
 end $$;
 
 -- As the Super Admin (member of no team) --------------------------------------
@@ -130,6 +193,15 @@ begin
     raise exception 'RLS check 8 failed: the Super Admin could not rename team A';
   end if;
   insert into public.teams (name) values ('RLS-Check Team C');
+
+  -- 15. A Super Admin may remove a team's last Team Admin.
+  delete from public.team_members
+  where team_id = '00000000-0000-4000-8000-0000000000a1'
+    and user_id = '00000000-0000-4000-8000-00000000c002';
+  get diagnostics changed = row_count;
+  if changed <> 1 then
+    raise exception 'RLS check 15 failed: the Super Admin could not remove the last Team Admin';
+  end if;
 end $$;
 
 -- As a visitor (anon) ---------------------------------------------------------
@@ -155,6 +227,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 9 of 9 checks' as result;
+select 'RLS checklist passed: 15 of 15 checks' as result;
 
 rollback;
