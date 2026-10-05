@@ -42,36 +42,62 @@ Staff log in with email and password at `/login`. There is no sign-up, no self-s
 - Invite and set-password emails link to `/auth/confirm`, which signs the person in and sends them to `/set-password`.
 - `public.profiles` has one row per auth user, created by a trigger on `auth.users`. `npm test` runs the migrations against an in-memory Postgres (PGlite) in `supabase/tests/`.
 
-#### Auth settings and emails
+#### Auth settings in the repo
 
-Auth settings live in `supabase/config.toml`: sign-up is off, the minimum password length is 10 and auth emails go through IONOS SMTP with the German templates in `supabase/templates/`. The SMTP credentials are never in the repo. Set them in your shell, preview the change, then push it:
+`supabase/config.toml` holds the target auth settings for production:
 
-```bash
-export SUPABASE_AUTH_SMTP_USER="<IONOS mailbox address>"
-export SUPABASE_AUTH_SMTP_PASS="<IONOS mailbox password>"
-export SUPABASE_AUTH_SMTP_ADMIN_EMAIL="<sender address, usually the mailbox address>"
-npx supabase config diff
-npx supabase config push
-```
+- sign-up is off
+- the minimum password length is 10
+- MFA is off
+- auth emails go through IONOS SMTP, using the German templates in `supabase/templates/`
 
-`site_url` (`http://localhost:3000`) is the base of every link in auth emails. Before the first real invite, set it to the deployed dashboard URL and add that URL with `/**` to `additional_redirect_urls`, then push again.
-
-The other values in `config.toml` mirror the cloud project. Run `npx supabase config diff` before every push, so that only intended changes are applied.
+Nothing in it reaches the cloud project until someone runs `npx supabase config push`. The values outside the auth sections mirror the cloud project. Run `npx supabase config diff` before every push, so that only intended changes are applied.
 
 Accepted limitations:
 
 - Supabase cannot switch off its public password-recovery endpoint. Someone who calls the API directly can still have a set-password link sent to their own mailbox. The dashboard offers no way to do this.
 - `/set-password` changes the password of whoever is signed in, without asking for the current password. This is the same trust a valid session already has.
 
+#### Current setup: local testing
+
+For now the dashboard runs only locally (`npm run dev`, `http://localhost:3000`), against the cloud project, using Supabase's built-in SMTP. `config.toml` is **not** pushed: its IONOS block needs credentials, and with built-in SMTP Supabase may refuse custom templates.
+
+1. `npm run db:push` applies the migrations.
+2. In the Supabase dashboard, open *Authentication → Sign In / Providers* and switch off *Allow new users to sign up*.
+3. Create accounts under *Authentication → Users → Add user → Create new user*, with a password of at least 10 characters and *Auto Confirm User* ticked. No email is sent. The trigger creates the profile.
+4. Run `supabase/snippets/first-super-admin.sql` once with your address (see "First Super Admin" below).
+5. Copy `.env.example` to `.env.local`, then run `npm run dev`. Log in at `http://localhost:3000`.
+
+Do not use *Send invitation* in this setup. Built-in SMTP sends Supabase's default invite email, and its link does not go through `/auth/confirm`. The person ends up on the dashboard without a session and is sent back to `/login`. Built-in SMTP also only delivers to members of the Supabase organisation.
+
+#### Going live
+
+Do this once, before the first real staff member is invited:
+
+1. **Deploy the dashboard.** Fill `.env.local` (it is read at build time), then run `npx wrangler login` and `npm run deploy` (see "Deploy to Cloudflare"). Note the dashboard URL.
+2. **Point auth links at it.** In `supabase/config.toml`, set `site_url` to the dashboard URL and add `"<dashboard URL>/**"` to `additional_redirect_urls`. Keep `http://localhost:3000/**` if you still want local logins to work. Commit the change.
+3. **Push the auth settings with IONOS SMTP.** Set the credentials in your shell; they never go in the repo. Check the diff: it should list only auth settings, the SMTP block and the email templates. Then push:
+
+   ```bash
+   export SUPABASE_AUTH_SMTP_USER="<IONOS mailbox address>"
+   export SUPABASE_AUTH_SMTP_PASS="<IONOS mailbox password>"
+   export SUPABASE_AUTH_SMTP_ADMIN_EMAIL="<sender address, usually the mailbox address>"
+   npx supabase config diff
+   npx supabase config push
+   ```
+
+4. **Test an invite end to end.** In the Supabase dashboard, open *Authentication → Users → Add user → Send invitation* and invite a mailbox you can read. Check that the German email arrives from the IONOS sender, that the link opens `<dashboard URL>/set-password`, and that you can set a password and log in.
+5. **Check that sign-up is off.** This call should fail with "Signups not allowed for this instance":
+
+   ```bash
+   curl -X POST "https://qhjysorczroizpgmagpp.supabase.co/auth/v1/signup" -H "apikey: <publishable key>" -H "Content-Type: application/json" -d '{"email":"test@example.org","password":"irrelevant-123"}'
+   ```
+
+6. **Clean up test accounts.** Delete accounts created during local testing that should not exist in production, under *Authentication → Users*. Their profiles are deleted with them. All data lives in the one cloud project (ADR-0006), so test accounts stay live until someone deletes them.
+
 #### First Super Admin
 
-Do this once, after `npm run db:push`:
-
-1. Make sure `site_url` points at the deployed dashboard (see above). Otherwise the invite link leads to `localhost`.
-2. In the Supabase dashboard, open *Authentication → Users → Add user → Send invitation* and invite the first person. The invite arrives through IONOS. They follow the link and set a password.
-3. Open `supabase/snippets/first-super-admin.sql`, replace the address with theirs and run it in the SQL editor. It returns the promoted row. It does nothing once any Super Admin exists.
-
-Further Super Admins are appointed from the dashboard (blueprint §2.1), not with this snippet.
+Run this once, after `npm run db:push` and after the person has an account (created locally as above, or invited once live). Open `supabase/snippets/first-super-admin.sql`, replace the address with theirs and run it in the SQL editor. It returns the promoted row. It does nothing once any Super Admin exists, so whoever you promote during local testing remains the first Super Admin in production. Further Super Admins are appointed from the dashboard (blueprint §2.1), not with this snippet.
 
 ### Deploy to Cloudflare
 

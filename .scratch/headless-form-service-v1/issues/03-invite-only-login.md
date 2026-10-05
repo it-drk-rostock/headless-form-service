@@ -39,3 +39,5 @@ Open points for the reviewer:
 - Node proxy on OpenNext/Cloudflare is marked experimental. It worked under `wrangler dev`.
 - The blueprint §9 env var is now `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (publishable key instead of the legacy anon key).
 - A local `.env.local` (gitignored) holds the publishable key for `npm run dev`.
+
+**2026-10-05, human + agent:** The human ran `npm run db:push`. For now the dashboard is tested only locally, with Supabase's built-in SMTP and accounts created in the Supabase dashboard. `config.toml` is not pushed yet. The README now has two sections: "Current setup: local testing" and a "Going live" checklist (deploy, `site_url`, IONOS `config push`, invite test, sign-up check, cleanup of test accounts). Criteria 2 and 5 stay open until "Going live" is done. Until then, public sign-up is switched off by hand in the Supabase dashboard.
