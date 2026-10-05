@@ -10,7 +10,7 @@
 - [x] Super Admins can create and rename teams; others cannot
 - [x] `/teams` lists only my teams (all teams for a Super Admin)
 - [x] `/teams/[id]` of a team I don't belong to is not accessible
-- [ ] RLS enforces team boundaries with the Super Admin bypass; a manual RLS checklist is written and run with a test team
+- [x] RLS enforces team boundaries with the Super Admin bypass; a manual RLS checklist is written and run with a test team
 
 ## Comments
 
@@ -37,3 +37,5 @@ Open points for the reviewer:
 - Team names don't have to be unique; the spec doesn't ask for it.
 - Beyond the criteria: the member count, the sidebar team list and breadcrumbs, `ContentPanel` `subtitle`/`actions`, and `formatDate` (de-DE, Europe/Berlin).
 - The detail page's facts are left-aligned with the title and capped at 800px, rather than centred (ui-design §4.4). Centring only the facts under a left-aligned title looked off.
+
+**2026-10-05, human + agent:** The human applied the migration and ran `supabase/snippets/rls-checklist-teams.sql` in the SQL editor of the cloud project, with no error. The editor shows only the last row-returning statement (the anon `set_config`), and a failed check would have stopped the script with `RLS check <n> failed`, so all nine checks passed. Criterion 5 is ticked. The snippet now ends with `RLS checklist passed: 9 of 9 checks`, so a run shows a clear result. Still open: step 3 (create and rename a team in the dashboard) and the optional step 4.

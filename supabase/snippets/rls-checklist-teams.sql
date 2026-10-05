@@ -2,7 +2,7 @@
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the editor reports success. Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 9 of 9 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -153,4 +153,8 @@ begin
 end $$;
 
 reset role;
+
+-- Shown as the result in the SQL editor; reached only if every check passed.
+select 'RLS checklist passed: 9 of 9 checks' as result;
+
 rollback;
