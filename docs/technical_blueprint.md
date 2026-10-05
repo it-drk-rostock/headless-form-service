@@ -244,7 +244,7 @@ There is a single cloud environment ([ADR-0006](./adr/0006-single-cloud-environm
 | Secret | Used by |
 | :--- | :--- |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Dashboard |
-| `SUPABASE_SERVICE_ROLE_KEY` | Edge functions; dashboard server only for admin operations (invites, set-password links) |
+| `SUPABASE_SECRET_KEY` (secret key `sb_secret_…`, replaces the legacy `service_role` key) | Dashboard server only, for admin operations (invites, set-password links). Edge functions get secret keys injected by the runtime (`SUPABASE_SECRET_KEYS`) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | `/load-form`, `/submit-form` |
 | `QSTASH_TOKEN` | `/submit-form`, dashboard server (retry from DLQ) |
 | `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | `/dispatch-email` |

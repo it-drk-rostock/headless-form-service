@@ -35,7 +35,7 @@
   - An existing account is added without an email.
   - If someone invites the same address at the same moment, the account is simply added.
 - **Set-password link:** `auth.resetPasswordForEmail`, sent only to members of the team, with the address read from the database. The 24-hour link goes through `/auth/confirm` to `/set-password`.
-- **Service role:** only `lib/supabase/admin.ts` (`server-only`) reads `SUPABASE_SERVICE_ROLE_KEY`. The key is used only after the action has checked that the caller is a Team Admin of the team or a Super Admin. Membership writes always run as the signed-in person, so RLS and the trigger have the final say. The built client bundles don't contain the key or the admin calls.
+- **Service role:** only `lib/supabase/admin.ts` (`server-only`) reads the secret key (`SUPABASE_SECRET_KEY`). The key is used only after the action has checked that the caller is a Team Admin of the team or a Super Admin. Membership writes always run as the signed-in person, so RLS and the trigger have the final say. The built client bundles don't contain the key or the admin calls.
 - **RLS checklist:** `supabase/snippets/rls-checklist-teams.sql` now has 15 checks, including the membership writes, profile visibility and the last Team Admin. A new test shows that it fails when the trigger is missing.
 - **Checks:**
   - `npm test` passes: 85 tests. New are 17 DB tests, 4 invite-flow tests and 3 email tests, and one ticket-04 test was updated for the new grants.
@@ -51,13 +51,13 @@ For the human, in this order:
 
 1. `npm run db:push` applies the memberships migration.
 2. In the Supabase SQL editor, run `supabase/snippets/rls-checklist-teams.sql`. Expect `RLS checklist passed: 15 of 15 checks`.
-3. Add `SUPABASE_SERVICE_ROLE_KEY` to `.env.local`. Use the secret key from *Project Settings → API Keys*. Then restart `npm run dev`.
+3. Add `SUPABASE_SECRET_KEY` to `.env.local`. Use the secret key (`sb_secret_…`) from *Project Settings → API Keys*, not the legacy `service_role` key. Then restart `npm run dev`.
 4. As Super Admin, on a team's page:
    - Invite an **existing** account (created as in README "Current setup"). Expect *…wurde ohne E-Mail zum Team hinzugefügt*.
    - Make it Team-Admin, then make yourself or it a member again.
    - Log in as that account and check that it can manage the team, but cannot demote itself while it is the last Team Admin.
    - As a plain member, check that there is no *Mitglied einladen* and no `⋯` menu.
-5. Criteria 1 and 4: after README "Going live" (IONOS `config push`, and on Cloudflare `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`):
+5. Criteria 1 and 4: after README "Going live" (IONOS `config push`, and on Cloudflare `wrangler secret put SUPABASE_SECRET_KEY`):
    - Invite a new address you can read, and check that the German invite arrives from IONOS and leads to `/set-password`.
    - Send yourself *Link zum Passwort senden*.
 
@@ -71,3 +71,5 @@ Open points for the reviewer:
 - **The trigger trusts calls without a signed-in person.** Any future code must not write `team_members` with the service-role client. `lib/supabase/admin.ts` says so.
 - **Beyond the criteria:** the optional name on invite, the *Sie* badge, the redirect after removing yourself, and the *no Team Admin* notice for Super Admins. Membership changes are not audited yet; that is ticket 06.
 - **Test seams.** The DB (as each role), the invite flow with fakes, and the email helper. These are the seams the repo already uses; I did not agree them beforehand.
+
+**2026-10-05, human + agent:** The human pointed out that Supabase now calls `service_role` a legacy key. Supabase's docs deprecate it by the end of 2026 and recommend the secret key (`sb_secret_…`) as `SUPABASE_SECRET_KEY`. The variable is renamed to that in `lib/supabase/admin.ts`, `.env.example`, README and blueprint §9; the code was already compatible with secret keys. A secret key still acts as the `service_role` Postgres role, so the prose about that role stays. Secret keys also refuse requests that look like they come from a browser, an extra safeguard on top of `server-only`.
