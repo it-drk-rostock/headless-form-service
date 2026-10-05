@@ -1,9 +1,9 @@
-import { Anchor, SimpleGrid, Stack, Text } from "@mantine/core";
+import { SimpleGrid, Stack, Text } from "@mantine/core";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getForm } from "@/lib/forms/queries.ts";
 import { formatDate, t } from "@/lib/i18n/index.ts";
+import { AnchorLink } from "../../../_components/AnchorLink.tsx";
 import { ContentPanel } from "../../../_components/ContentPanel.tsx";
 import { FormStatusBadge } from "../FormStatusBadge.tsx";
 import { FormSettings } from "./FormSettings.tsx";
@@ -27,9 +27,9 @@ export default async function FormPage({ params }: PageProps<"/forms/[id]">) {
     <ContentPanel title={form.name} subtitle={form.id}>
       <SimpleGrid cols={{ base: 1, sm: 3 }} mt="xl" maw={800}>
         <Fact label={t("forms.detailTeam")}>
-          <Anchor component={Link} href={`/teams/${form.teamId}`}>
+          <AnchorLink href={`/teams/${form.teamId}`}>
             {form.teamName}
-          </Anchor>
+          </AnchorLink>
         </Fact>
         <Fact label={t("forms.detailStatus")}>
           <FormStatusBadge status={form.status} />
