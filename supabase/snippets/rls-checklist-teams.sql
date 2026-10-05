@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log and forms (tickets 04-07). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms and the draft (tickets 04-08). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 25 of 25 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 27 of 27 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -123,6 +123,31 @@ begin
   if changed <> 0 then
     raise exception 'RLS check 22 failed: Member A changed team B''s recipients';
   end if;
+
+  -- 26. A member saves the draft of their own team's forms, stamped with who
+  -- and when, and of no other team's.
+  update public.forms set draft_schema = '{"pages":[]}'
+  where id = '00000000-0000-4000-8000-0000000000f1';
+  if (select draft_updated_by from public.forms
+      where id = '00000000-0000-4000-8000-0000000000f1')
+     is distinct from '00000000-0000-4000-8000-00000000c003' then
+    raise exception 'RLS check 26 failed: the draft save of Member A is not stamped with Member A';
+  end if;
+  update public.forms set draft_schema = '{"pages":[]}'
+  where id = '00000000-0000-4000-8000-0000000000f2';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 26 failed: Member A saved team B''s draft';
+  end if;
+
+  -- 27. The draft refuses file and signature questions, from any path.
+  begin
+    update public.forms
+    set draft_schema = '{"pages":[{"name":"p","elements":[{"type":"file","name":"f"}]}]}'
+    where id = '00000000-0000-4000-8000-0000000000f1';
+    raise exception 'RLS check 27 failed: Member A saved a file question into the draft';
+  exception when check_violation then null;
+  end;
 end $$;
 
 -- As Member B ---------------------------------------------------------------
@@ -248,12 +273,18 @@ begin
     raise exception 'RLS check 23 failed: the recipient change of check 22 is not in the audit log';
   end if;
 
-  -- 24. Nobody signed in moves a form to another team, deletes it, or sets
-  -- what only publishing, closing and archiving may set.
+  -- 24. Nobody signed in moves a form to another team, deletes it, sets
+  -- what only publishing, closing and archiving may set, or who saved the draft.
   begin
     update public.forms set is_closed = true, current_version = 1
     where id = '00000000-0000-4000-8000-0000000000f1';
     raise exception 'RLS check 24 failed: the Team Admin wrote a column without a write path';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.forms set draft_updated_by = '00000000-0000-4000-8000-00000000c003'
+    where id = '00000000-0000-4000-8000-0000000000f1';
+    raise exception 'RLS check 24 failed: the Team Admin set who saved the draft';
   exception when insufficient_privilege then null;
   end;
   begin
@@ -351,6 +382,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 25 of 25 checks' as result;
+select 'RLS checklist passed: 27 of 27 checks' as result;
 
 rollback;

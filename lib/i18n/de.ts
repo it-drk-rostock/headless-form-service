@@ -78,6 +78,13 @@ export const de = {
   "forms.status.closed": "Geschlossen",
   "forms.status.archived": "Archiviert",
   "forms.settingsTitle": "Einstellungen",
+  "forms.viewDesigner": "Designer",
+  "forms.viewSettings": "Einstellungen",
+  "forms.designerHint":
+    "Änderungen werden automatisch im Entwurf gespeichert. Besucher sehen sie erst nach dem Veröffentlichen.",
+  "forms.draftNeverSaved": "Entwurf noch nicht gespeichert",
+  "forms.draftSaved": "Entwurf gespeichert am {at}",
+  "forms.draftSavedBy": "Entwurf gespeichert am {at} von {by}",
   "forms.recipients": "Empfänger",
   "forms.recipientsHint":
     "Diese Adressen erhalten jede Einsendung als E-Mail. Eine Adresse pro Zeile, höchstens {maxRecipients}.",
@@ -94,6 +101,10 @@ export const de = {
   "forms.errorNameMissing": "Bitte einen Namen eingeben.",
   "forms.errorNameTooLong": "Der Name darf höchstens {max} Zeichen lang sein.",
   "forms.errorTeamMissing": "Bitte ein Team wählen.",
+  "forms.errorDraftInvalid":
+    "Der Entwurf ist ungültig und konnte nicht gespeichert werden.",
+  "forms.errorDraftQuestionType":
+    "Datei- und Unterschriftsfragen sind nicht erlaubt. Bitte entfernen und erneut speichern.",
   "forms.errorRecipientInvalid":
     "„{address}“ ist keine gültige E-Mail-Adresse.",
   "forms.errorTooManyRecipients":

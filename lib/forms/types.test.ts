@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formStatus } from "./types.ts";
+import { formStatus, formView } from "./types.ts";
 
 const open = { archivedAt: null, isClosed: false, currentVersion: null };
 
@@ -27,5 +27,18 @@ describe("formStatus", () => {
         currentVersion: 1,
       }),
     ).toBe("archived");
+  });
+});
+
+describe("formView", () => {
+  it("opens the view the URL names", () => {
+    expect(formView("settings")).toBe("settings");
+    expect(formView("designer")).toBe("designer");
+  });
+
+  it("falls back to the designer", () => {
+    expect(formView(undefined)).toBe("designer");
+    expect(formView("unbekannt")).toBe("designer");
+    expect(formView(["settings", "designer"])).toBe("designer");
   });
 });

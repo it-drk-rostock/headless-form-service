@@ -7,6 +7,13 @@ import { requireProfile } from "../auth/profile.ts";
 import type { MessageKey } from "../i18n/index.ts";
 import { createClient } from "../supabase/server.ts";
 import { isTeamId } from "../teams/id.ts";
+import {
+  DRAFT_STAMP_COLUMNS,
+  type DraftStamp,
+  type DraftStampRow,
+  draftSchemaProblem,
+  toDraftStamp,
+} from "./draft.ts";
 import { isFormId } from "./id.ts";
 import { formNameProblem } from "./name.ts";
 import { parseRecipients } from "./recipients.ts";
@@ -79,6 +86,38 @@ export async function updateFormSettings(
 
   refresh();
   return { error: null, savedAt: Date.now() };
+}
+
+export type DraftSaveResult =
+  | { error: MessageKey }
+  | { error: null; stamp: DraftStamp };
+
+/**
+ * Saves the designer's questions into the form's single draft. Concurrent
+ * saves are last-write-wins; the database stamps who saved and when. Visitors
+ * keep seeing the current version until the draft is published.
+ */
+export async function saveDraft(
+  id: string,
+  schema: unknown,
+): Promise<DraftSaveResult> {
+  const problem = draftSchemaProblem(schema);
+  if (problem) return { error: problem };
+  if (!isFormId(id)) return { error: "forms.errorForbidden" };
+
+  await requireProfile();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("forms")
+    .update({ draft_schema: schema })
+    .eq("id", id)
+    .select(DRAFT_STAMP_COLUMNS)
+    .overrideTypes<DraftStampRow[], { merge: false }>();
+  if (error) return { error: writeError(error) };
+  // RLS hides rows the person may not change, so nothing matched.
+  if (data.length === 0) return { error: "forms.errorForbidden" };
+
+  return { error: null, stamp: toDraftStamp(data[0]) };
 }
 
 function writeError(error: PostgrestError): MessageKey {

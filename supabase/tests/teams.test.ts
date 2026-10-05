@@ -277,4 +277,16 @@ describe("manual RLS checklist", () => {
     await db.exec("drop trigger forms_audit_settings_change on public.forms");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 23 failed/);
   });
+
+  it("catches draft saves without who and when", async () => {
+    await db.exec("drop trigger forms_stamp_draft on public.forms");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 26 failed/);
+  });
+
+  it("catches drafts that accept file questions", async () => {
+    await db.exec(
+      "alter table public.forms drop constraint forms_draft_schema_question_types_check",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 27 failed/);
+  });
 });

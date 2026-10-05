@@ -26,7 +26,11 @@
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "survey-core": "^3.1.2",
+    "survey-creator-core": "^3.1.2",
+    "survey-creator-react": "^3.1.2",
+    "survey-react-ui": "^3.1.2"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.2",

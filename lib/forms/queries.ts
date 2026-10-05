@@ -2,6 +2,13 @@ import "server-only";
 import { cache } from "react";
 import { requireProfile } from "../auth/profile.ts";
 import { createClient } from "../supabase/server.ts";
+import {
+  DRAFT_STAMP_COLUMNS,
+  type DraftSchema,
+  type DraftStampRow,
+  type FormDraft,
+  toDraftStamp,
+} from "./draft.ts";
 import { isFormId } from "./id.ts";
 import { type FormDetails, type FormSummary, formStatus } from "./types.ts";
 
@@ -76,3 +83,29 @@ export const getForm = cache(
     };
   },
 );
+
+/**
+ * A form's draft questions with who saved them last, for the designer. Null
+ * when the form does not exist or the person may not see it.
+ */
+export async function getFormDraft(id: string): Promise<FormDraft | null> {
+  if (!isFormId(id)) return null;
+  await requireProfile();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("forms")
+    .select(`draft_schema, ${DRAFT_STAMP_COLUMNS}`)
+    .eq("id", id)
+    .maybeSingle()
+    .overrideTypes<
+      DraftStampRow & { draft_schema: DraftSchema },
+      { merge: false }
+    >();
+  if (error) {
+    throw new Error(
+      `Draft of form ${id} could not be loaded: ${error.message}`,
+    );
+  }
+  if (!data) return null;
+  return { schema: data.draft_schema, stamp: toDraftStamp(data) };
+}

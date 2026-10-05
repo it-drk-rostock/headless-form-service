@@ -27,3 +27,14 @@ export function formStatus(form: {
   if (form.isClosed) return "closed";
   return form.currentVersion === null ? "draft" : "published";
 }
+
+/** The views of a form's page; the first, the designer, is the default. */
+export const FORM_VIEWS = ["designer", "settings"] as const;
+export type FormView = (typeof FORM_VIEWS)[number];
+
+/** The view a `?view=` search parameter asks for, the designer if none or unknown. */
+export function formView(param: string | string[] | undefined): FormView {
+  return (FORM_VIEWS as readonly unknown[]).includes(param)
+    ? (param as FormView)
+    : "designer";
+}
