@@ -31,6 +31,23 @@ const actions: Record<
     summary: (d) =>
       t("audit.summary.memberRemoved", { who: member(d), role: role(d.role) }),
   },
+  "form.created": {
+    label: t("audit.action.formCreated"),
+    summary: (d) => t("audit.summary.formCreated", { name: text(d.name) }),
+  },
+  "form.renamed": {
+    label: t("audit.action.formRenamed"),
+    summary: (d) =>
+      t("audit.summary.formRenamed", { from: text(d.from), to: text(d.to) }),
+  },
+  "form.recipients_changed": {
+    label: t("audit.action.formRecipientsChanged"),
+    summary: (d) =>
+      t("audit.summary.formRecipientsChanged", {
+        name: text(d.name),
+        changes: recipientChanges(texts(d.from), texts(d.to)),
+      }),
+  },
 };
 
 /**
@@ -65,6 +82,20 @@ function text(value: unknown): string {
   return typeof value === "string" || typeof value === "number"
     ? String(value)
     : "";
+}
+
+function texts(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(text) : [];
+}
+
+/** Added and removed addresses; only the order changed, the new list. */
+function recipientChanges(from: string[], to: string[]): string {
+  const changes = [
+    ...to.filter((address) => !from.includes(address)).map((a) => `+ ${a}`),
+    ...from.filter((address) => !to.includes(address)).map((a) => `− ${a}`),
+  ];
+  if (changes.length > 0) return changes.join(", ");
+  return to.length > 0 ? to.join(", ") : t("audit.summary.none");
 }
 
 function plainDetails(details: Details): string {

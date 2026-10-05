@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emailProblem, normalizeEmail } from "./email.ts";
-
-describe("normalizeEmail", () => {
-  it("trims and lower-cases, the way Supabase Auth stores addresses", () => {
-    expect(normalizeEmail("  Lea.Kurz@DRK-Rostock.de ")).toBe(
-      "lea.kurz@drk-rostock.de",
-    );
-  });
-});
+import { emailProblem } from "./email.ts";
 
 describe("emailProblem", () => {
   it("accepts an ordinary address", () => {

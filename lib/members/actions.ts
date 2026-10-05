@@ -5,11 +5,12 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "../auth/profile.ts";
 import type { MessageKey } from "../i18n/index.ts";
+import { normalizeEmail } from "../shared/email.ts";
 import { createAdminClient } from "../supabase/admin.ts";
 import { createClient } from "../supabase/server.ts";
 import { isTeamId } from "../teams/id.ts";
 import { isTeamRole } from "../teams/types.ts";
-import { emailProblem, normalizeEmail } from "./email.ts";
+import { emailProblem } from "./email.ts";
 import { type InviteOutcome, inviteMember } from "./invite.ts";
 import { FULL_NAME_MAX_LENGTH } from "./types.ts";
 

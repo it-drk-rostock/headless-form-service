@@ -1,0 +1,78 @@
+import "server-only";
+import { cache } from "react";
+import { requireProfile } from "../auth/profile.ts";
+import { createClient } from "../supabase/server.ts";
+import { isFormId } from "./id.ts";
+import { type FormDetails, type FormSummary, formStatus } from "./types.ts";
+
+type FormRow = {
+  id: string;
+  name: string;
+  team_id: string;
+  is_closed: boolean;
+  archived_at: string | null;
+  current_version: number | null;
+  recipients: string[];
+  created_at: string;
+  updated_at: string;
+  teams: { name: string };
+};
+
+const FORM_COLUMNS =
+  "id, name, team_id, is_closed, archived_at, current_version, recipients, created_at, updated_at, teams(name)";
+
+function toSummary(row: FormRow): FormSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    teamId: row.team_id,
+    teamName: row.teams.name,
+    status: formStatus({
+      archivedAt: row.archived_at,
+      isClosed: row.is_closed,
+      currentVersion: row.current_version,
+    }),
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * The forms of every team the signed-in person belongs to (of every team for
+ * a Super Admin), without archived ones. RLS decides which rows come back.
+ */
+export const listMyForms = cache(async (): Promise<FormSummary[]> => {
+  await requireProfile();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("forms")
+    .select(FORM_COLUMNS)
+    .is("archived_at", null)
+    .order("name")
+    .overrideTypes<FormRow[], { merge: false }>();
+  if (error) throw new Error(`Forms could not be loaded: ${error.message}`);
+  return data.map(toSummary);
+});
+
+/** One form, or null when it does not exist or the person may not see it. */
+export const getForm = cache(
+  async (id: string): Promise<FormDetails | null> => {
+    if (!isFormId(id)) return null;
+    await requireProfile();
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("forms")
+      .select(FORM_COLUMNS)
+      .eq("id", id)
+      .maybeSingle()
+      .overrideTypes<FormRow, { merge: false }>();
+    if (error) {
+      throw new Error(`Form ${id} could not be loaded: ${error.message}`);
+    }
+    if (!data) return null;
+    return {
+      ...toSummary(data),
+      recipients: data.recipients,
+      createdAt: data.created_at,
+    };
+  },
+);

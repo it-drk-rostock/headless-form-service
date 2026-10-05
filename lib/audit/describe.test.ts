@@ -51,6 +51,56 @@ describe("describeAuditEntry", () => {
     ).toBe("Gelöschtes Konto (Mitglied)");
   });
 
+  it("names a created form", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.created",
+        details: { name: "Kursanmeldung" },
+      }),
+    ).toEqual({ action: "Formular angelegt", summary: "Kursanmeldung" });
+  });
+
+  it("shows a rename from old to new", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.renamed",
+        details: { from: "Kursanmeldung", to: "Kurse" },
+      }),
+    ).toEqual({
+      action: "Formular umbenannt",
+      summary: "Kursanmeldung → Kurse",
+    });
+  });
+
+  it("shows which recipients were added and removed", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.recipients_changed",
+        details: {
+          name: "Kurse",
+          from: ["alt@drk-rostock.de", "bleibt@drk-rostock.de"],
+          to: ["bleibt@drk-rostock.de", "neu@drk-rostock.de"],
+        },
+      }),
+    ).toEqual({
+      action: "Empfänger geändert",
+      summary: "Kurse: + neu@drk-rostock.de, − alt@drk-rostock.de",
+    });
+  });
+
+  it("shows a reordered list as the new list", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.recipients_changed",
+        details: {
+          name: "Kurse",
+          from: ["a@drk-rostock.de", "b@drk-rostock.de"],
+          to: ["b@drk-rostock.de", "a@drk-rostock.de"],
+        },
+      }).summary,
+    ).toBe("Kurse: b@drk-rostock.de, a@drk-rostock.de");
+  });
+
   it("shows actions it does not know yet as they are stored", () => {
     expect(
       describeAuditEntry({

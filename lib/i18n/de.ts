@@ -57,6 +57,51 @@ export const de = {
   "forms.title": "Formulare",
   "forms.emptyTitle": "Noch keine Formulare",
   "forms.emptyHint": "Hier erscheinen die Formulare aller eigenen Teams.",
+  "forms.emptyHintNoTeam":
+    "Formulare gehören einem Team. Sobald Sie einem Team angehören, können Sie hier Formulare anlegen.",
+  "forms.create": "Formular anlegen",
+  "forms.createTitle": "Neues Formular",
+  "forms.createSubmit": "Anlegen",
+  "forms.name": "Name",
+  "forms.nameHint":
+    "Wie das Formular im Dashboard und in E-Mails heißt, höchstens {max} Zeichen.",
+  "forms.team": "Team",
+  "forms.teamHint":
+    "Das Team, dem das Formular gehört. Nur seine Mitglieder sehen und bearbeiten es.",
+  "forms.teamPlaceholder": "Team wählen",
+  "forms.columnName": "Name",
+  "forms.columnTeam": "Team",
+  "forms.columnStatus": "Status",
+  "forms.columnUpdated": "Geändert",
+  "forms.status.draft": "Entwurf",
+  "forms.status.published": "Veröffentlicht",
+  "forms.status.closed": "Geschlossen",
+  "forms.status.archived": "Archiviert",
+  "forms.settingsTitle": "Einstellungen",
+  "forms.recipients": "Empfänger",
+  "forms.recipientsHint":
+    "Diese Adressen erhalten jede Einsendung als E-Mail. Eine Adresse pro Zeile, höchstens {maxRecipients}.",
+  "forms.recipientsNone":
+    "Noch keine Empfänger. Ohne Empfänger werden Einsendungen niemandem zugestellt.",
+  "forms.save": "Speichern",
+  "forms.saved": "Gespeichert.",
+  "forms.detailTeam": "Team",
+  "forms.detailStatus": "Status",
+  "forms.detailCreated": "Angelegt am",
+  "forms.notFoundTitle": "Formular nicht gefunden",
+  "forms.notFoundHint":
+    "Dieses Formular gibt es nicht, oder es ist nur für die Mitglieder seines Teams sichtbar.",
+  "forms.errorNameMissing": "Bitte einen Namen eingeben.",
+  "forms.errorNameTooLong": "Der Name darf höchstens {max} Zeichen lang sein.",
+  "forms.errorTeamMissing": "Bitte ein Team wählen.",
+  "forms.errorRecipientInvalid":
+    "„{address}“ ist keine gültige E-Mail-Adresse.",
+  "forms.errorTooManyRecipients":
+    "Höchstens {maxRecipients} Empfänger sind möglich.",
+  "forms.errorForbidden":
+    "Nur Mitglieder des Teams und Super Admins dürfen seine Formulare anlegen und ändern.",
+  "forms.errorGeneric":
+    "Das Formular konnte nicht gespeichert werden. Bitte erneut versuchen.",
 
   "teams.title": "Teams",
   "teams.emptyTitle": "Noch keine Teams",
@@ -177,6 +222,13 @@ export const de = {
   "audit.summary.memberAdded": "{who} als {role}",
   "audit.summary.memberRoleChanged": "{who}: {from} → {to}",
   "audit.summary.memberRemoved": "{who} ({role})",
+  "audit.action.formCreated": "Formular angelegt",
+  "audit.action.formRenamed": "Formular umbenannt",
+  "audit.action.formRecipientsChanged": "Empfänger geändert",
+  "audit.summary.formCreated": "{name}",
+  "audit.summary.formRenamed": "{from} → {to}",
+  "audit.summary.formRecipientsChanged": "{name}: {changes}",
+  "audit.summary.none": "keine",
   "audit.newer": "Neuere",
   "audit.older": "Ältere",
   "audit.pageOf": "Seite {page} von {pages}",

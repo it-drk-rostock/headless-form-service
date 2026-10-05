@@ -266,4 +266,15 @@ describe("manual RLS checklist", () => {
     );
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 17 failed/);
   });
+
+  it("catches forms that leak to other teams", async () => {
+    await db.exec(`create policy "leak" on public.forms for select
+      to authenticated using (true)`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 20 failed/);
+  });
+
+  it("catches recipient changes that are not recorded", async () => {
+    await db.exec("drop trigger forms_audit_settings_change on public.forms");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 23 failed/);
+  });
 });

@@ -124,6 +124,15 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 - `details` holds readable context, such as the member's address and role. It never holds submission data.
 - The audit log is part of `supabase/snippets/rls-checklist-teams.sql` (checks 16–19, and 9 for anon).
 
+### Forms
+
+`public.forms` holds each team's forms: settings that take effect at once (name, recipients, and later closed, archived and the rest), plus the single draft. Any member of the owning team, and every Super Admin, can create a form and change its name and recipients. `/forms` lists the forms of all your teams, without archived ones. `/forms/[id]` shows a form's settings.
+
+- Creating a form asks which of your teams owns it. A form never moves to another team, and nobody deletes it through the Data API.
+- Recipients must be lower-case email addresses (the `public.email_address` domain, at most 20 per form). The dashboard accepts one per line, or separated by commas or semicolons, and stores them lower-case, each once. A new form starts without recipients; they are set afterwards, so every list shows up in the audit log as a change.
+- Creating, renaming and recipient changes are recorded in the audit log by database triggers, with the old and new value.
+- Forms are part of `supabase/snippets/rls-checklist-teams.sql` (checks 20–25, plus 4 and 9).
+
 ### Deploy to Cloudflare
 
 The dashboard runs as a Cloudflare Worker built with OpenNext (`wrangler.jsonc`, `open-next.config.ts`). Log in once per machine with `npx wrangler login`, then:
