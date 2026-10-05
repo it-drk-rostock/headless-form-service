@@ -16,20 +16,23 @@ import {
   IconFiles,
   IconLayoutSidebarLeftCollapse,
   IconUsers,
+  IconUsersGroup,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { t } from "@/lib/i18n/index.ts";
 import classes from "./DashboardShell.module.css";
-import type { ModuleId } from "./navigation.ts";
+import type { ModuleId, ShellTeam } from "./navigation.ts";
 
 export function ModuleSidebar({
   activeId,
   pathname,
+  teams,
   onHide,
   onNavigate,
 }: {
   activeId: ModuleId | undefined;
   pathname: string;
+  teams: ShellTeam[];
   onHide: () => void;
   /** Called when an item is clicked, so the narrow-screen drawer can close. */
   onNavigate?: () => void;
@@ -64,21 +67,32 @@ export function ModuleSidebar({
             onClick={onNavigate}
           />
         ) : (
-          <>
-            <SidebarItem
-              href="/forms"
-              label={t("nav.allForms")}
-              icon={<IconFiles size={16} stroke={1.5} />}
-              pathname={pathname}
-              onClick={onNavigate}
-            />
-            <SidebarSection label={t("nav.sectionTeams")}>
-              <Text c="gray.6" px="sm" py={8}>
-                {t("nav.noTeams")}
-              </Text>
-            </SidebarSection>
-          </>
+          <SidebarItem
+            href="/forms"
+            label={t("nav.allForms")}
+            icon={<IconFiles size={16} stroke={1.5} />}
+            pathname={pathname}
+            onClick={onNavigate}
+          />
         )}
+        <SidebarSection label={t("nav.sectionTeams")}>
+          {teams.length > 0 ? (
+            teams.map((team) => (
+              <SidebarItem
+                key={team.id}
+                href={`/teams/${team.id}`}
+                label={team.name}
+                icon={<IconUsersGroup size={16} stroke={1.5} />}
+                pathname={pathname}
+                onClick={onNavigate}
+              />
+            ))
+          ) : (
+            <Text c="gray.6" px="sm" py={8}>
+              {t("nav.noTeams")}
+            </Text>
+          )}
+        </SidebarSection>
       </Box>
     </Box>
   );

@@ -99,6 +99,10 @@ Do this once, before the first real staff member is invited:
 
 Run this once, after `npm run db:push` and after the person has an account (created locally as above, or invited once live). Open `supabase/snippets/first-super-admin.sql`, replace the address with theirs and run it in the SQL editor. It returns the promoted row. It does nothing once any Super Admin exists, so whoever you promote during local testing remains the first Super Admin in production. Further Super Admins are appointed from the dashboard (blueprint §2.1), not with this snippet.
 
+### Teams
+
+`public.teams` and `public.team_members` hold who belongs to which team, with one role per team (`team_admin` or `member`). RLS lets people see only their own teams and memberships. Super Admins see all teams, and only they can create and rename teams. After a migration that touches team access, run `supabase/snippets/rls-checklist-teams.sql` in the SQL editor. It checks the rules as different people on throwaway test data, then rolls back. `npm test` runs the same checklist against the migrations.
+
 ### Deploy to Cloudflare
 
 The dashboard runs as a Cloudflare Worker built with OpenNext (`wrangler.jsonc`, `open-next.config.ts`). Log in once per machine with `npx wrangler login`, then:

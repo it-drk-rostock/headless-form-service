@@ -16,3 +16,14 @@ export function t(
     name in params ? String(params[name]) : placeholder,
   );
 }
+
+// Fixed time zone, so the server (UTC on Cloudflare) and the browser render the same text.
+const dateFormat = new Intl.DateTimeFormat("de-DE", {
+  dateStyle: "medium",
+  timeZone: "Europe/Berlin",
+});
+
+/** A timestamp as a German date, e.g. "05.10.2026". */
+export function formatDate(isoTimestamp: string): string {
+  return dateFormat.format(new Date(isoTimestamp));
+}

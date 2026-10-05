@@ -5,7 +5,7 @@ import { useDisclosure, useMediaQuery } from "@mantine/hooks";
 import { usePathname } from "next/navigation";
 import { IconRail } from "./IconRail.tsx";
 import { ModuleSidebar } from "./ModuleSidebar.tsx";
-import { activeModule } from "./navigation.ts";
+import { activeModule, breadcrumbs, type ShellTeam } from "./navigation.ts";
 import { TopBar } from "./TopBar.tsx";
 import type { ShellUser } from "./UserMenu.tsx";
 
@@ -21,9 +21,11 @@ const SIDEBAR_INLINE_FROM = em(992);
  */
 export function DashboardShell({
   user,
+  teams,
   children,
 }: {
   user: ShellUser;
+  teams: ShellTeam[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -33,7 +35,7 @@ export function DashboardShell({
   const [drawerOpen, drawer] = useDisclosure(false);
 
   const showSidebar = () => (sidebarInline ? sidebar.open() : drawer.open());
-  const sidebarProps = { activeId: currentModule?.id, pathname };
+  const sidebarProps = { activeId: currentModule?.id, pathname, teams };
 
   return (
     <AppShell
@@ -50,7 +52,7 @@ export function DashboardShell({
     >
       <AppShell.Header>
         <TopBar
-          module={currentModule}
+          crumbs={breadcrumbs(pathname, teams)}
           sidebarHidden={!sidebarOpen}
           onShowSidebar={showSidebar}
         />

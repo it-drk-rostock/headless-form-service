@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeModule } from "./navigation.ts";
+import { activeModule, breadcrumbs } from "./navigation.ts";
 
 describe("activeModule", () => {
   it("finds the module whose route the path is in", () => {
@@ -15,5 +15,30 @@ describe("activeModule", () => {
 
   it("finds no module outside the module routes", () => {
     expect(activeModule("/")).toBeUndefined();
+  });
+});
+
+describe("breadcrumbs", () => {
+  const teams = [{ id: "t-1", name: "Blutspende" }];
+
+  it("shows only the module on a module page", () => {
+    expect(breadcrumbs("/teams", teams)).toEqual([{ label: "Teams" }]);
+  });
+
+  it("adds the team name on a team page, with the module as a link", () => {
+    expect(breadcrumbs("/teams/t-1", teams)).toEqual([
+      { label: "Teams", href: "/teams" },
+      { label: "Blutspende" },
+    ]);
+  });
+
+  it("does not name a team the person cannot see", () => {
+    expect(breadcrumbs("/teams/t-2", teams)).toEqual([
+      { label: "Teams", href: "/teams" },
+    ]);
+  });
+
+  it("shows nothing outside the modules", () => {
+    expect(breadcrumbs("/", teams)).toEqual([]);
   });
 });

@@ -1,0 +1,250 @@
+import type { PGlite } from "@electric-sql/pglite";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  createAuthUser,
+  migratedDatabase,
+  queryAs,
+  readSnippet,
+} from "./database.ts";
+
+let db: PGlite;
+
+beforeEach(async () => {
+  db = await migratedDatabase();
+});
+
+async function superAdmin(email: string): Promise<string> {
+  const id = await createAuthUser(db, email);
+  await db.query(
+    "update public.profiles set is_super_admin = true where id = $1",
+    [id],
+  );
+  return id;
+}
+
+async function team(name: string): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    "insert into public.teams (name) values ($1) returning id",
+    [name],
+  );
+  return rows[0].id;
+}
+
+async function addMember(
+  teamId: string,
+  userId: string,
+  role: "team_admin" | "member" = "member",
+) {
+  await db.query(
+    "insert into public.team_members (team_id, user_id, role) values ($1, $2, $3)",
+    [teamId, userId, role],
+  );
+}
+
+describe("teams", () => {
+  it("can be created by a Super Admin", async () => {
+    const admin = await superAdmin("admin@drk-rostock.de");
+
+    const created = await queryAs(
+      db,
+      { userId: admin },
+      "insert into public.teams (name) values ('Blutspende') returning name",
+    );
+    expect(created).toEqual([{ name: "Blutspende" }]);
+  });
+
+  it("can be renamed by a Super Admin who is not a member", async () => {
+    const admin = await superAdmin("admin@drk-rostock.de");
+    const bloodDrive = await team("Blutspende");
+
+    const renamed = await queryAs(
+      db,
+      { userId: admin },
+      "update public.teams set name = 'Blutspendedienst' where id = $1 returning name",
+      [bloodDrive],
+    );
+    expect(renamed).toEqual([{ name: "Blutspendedienst" }]);
+  });
+
+  it("cannot be created by anyone else, not even a Team Admin", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    await addMember(await team("Erste Hilfe"), anna, "team_admin");
+
+    await expect(
+      queryAs(
+        db,
+        { userId: anna },
+        "insert into public.teams (name) values ('Eigenes Team')",
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("cannot be renamed by a Team Admin of that team", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    const firstAid = await team("Erste Hilfe");
+    await addMember(firstAid, anna, "team_admin");
+
+    const renamed = await queryAs(
+      db,
+      { userId: anna },
+      "update public.teams set name = 'Umbenannt' where id = $1 returning id",
+      [firstAid],
+    );
+    expect(renamed).toEqual([]);
+  });
+
+  it("need a name that is not blank", async () => {
+    await expect(team("   ")).rejects.toThrow(/teams_name_check/);
+  });
+
+  it("are visible only to their members", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    const firstAid = await team("Erste Hilfe");
+    await team("Blutspende");
+    await addMember(firstAid, anna);
+
+    const rows = await queryAs(
+      db,
+      { userId: anna },
+      "select id from public.teams",
+    );
+    expect(rows).toEqual([{ id: firstAid }]);
+  });
+
+  it("are all visible to a Super Admin without membership", async () => {
+    const admin = await superAdmin("admin@drk-rostock.de");
+    await team("Erste Hilfe");
+    await team("Blutspende");
+
+    const rows = await queryAs(
+      db,
+      { userId: admin },
+      "select id from public.teams",
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("give the anon role no access", async () => {
+    await team("Erste Hilfe");
+    await expect(
+      queryAs(db, "anon", "select id from public.teams"),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      queryAs(db, "anon", "select team_id from public.team_members"),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("disappear with their memberships", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    const firstAid = await team("Erste Hilfe");
+    await addMember(firstAid, anna);
+
+    await db.query("delete from public.teams where id = $1", [firstAid]);
+    const { rows } = await db.query("select 1 from public.team_members");
+    expect(rows).toEqual([]);
+  });
+});
+
+describe("team members", () => {
+  it("have the role team_admin or member", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    await expect(
+      db.query(
+        "insert into public.team_members (team_id, user_id, role) values ($1, $2, 'owner')",
+        [await team("Erste Hilfe"), anna],
+      ),
+    ).rejects.toThrow(/invalid input value for enum/);
+  });
+
+  it("belong to a team only once", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    const firstAid = await team("Erste Hilfe");
+    await addMember(firstAid, anna, "member");
+    await expect(addMember(firstAid, anna, "team_admin")).rejects.toThrow(
+      /duplicate key/,
+    );
+  });
+
+  it("can belong to several teams", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    await addMember(await team("Erste Hilfe"), anna, "team_admin");
+    await addMember(await team("Blutspende"), anna, "member");
+
+    const rows = await queryAs(
+      db,
+      { userId: anna },
+      "select role from public.team_members order by role",
+    );
+    expect(rows).toEqual([{ role: "team_admin" }, { role: "member" }]);
+  });
+
+  it("are visible to the members of the same team only", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    const max = await createAuthUser(db, "max@drk-rostock.de");
+    const eve = await createAuthUser(db, "eve@drk-rostock.de");
+    const firstAid = await team("Erste Hilfe");
+    await addMember(firstAid, anna);
+    await addMember(firstAid, max);
+    await addMember(await team("Blutspende"), eve);
+
+    const rows = await queryAs<{ user_id: string }>(
+      db,
+      { userId: anna },
+      "select user_id from public.team_members",
+    );
+    expect(rows.map((r) => r.user_id).sort()).toEqual([anna, max].sort());
+  });
+
+  it("are all visible to a Super Admin", async () => {
+    const admin = await superAdmin("admin@drk-rostock.de");
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    await addMember(await team("Erste Hilfe"), anna);
+    await addMember(await team("Blutspende"), anna);
+
+    const rows = await queryAs(
+      db,
+      { userId: admin },
+      "select team_id from public.team_members",
+    );
+    expect(rows).toHaveLength(2);
+  });
+
+  it("cannot add themselves to a team or change their role", async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    const firstAid = await team("Erste Hilfe");
+    await addMember(firstAid, anna, "member");
+
+    await expect(
+      queryAs(
+        db,
+        { userId: anna },
+        "insert into public.team_members (team_id, user_id) values ($1, $2)",
+        [await team("Blutspende"), anna],
+      ),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      queryAs(
+        db,
+        { userId: anna },
+        "update public.team_members set role = 'team_admin' where user_id = $1",
+        [anna],
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("manual RLS checklist", () => {
+  const checklist = readSnippet("rls-checklist-teams.sql");
+
+  it("passes against the migrations and keeps nothing", async () => {
+    await db.exec(checklist);
+    const { rows } = await db.query("select 1 from public.teams");
+    expect(rows).toEqual([]);
+  });
+
+  it("catches a team that leaks to non-members", async () => {
+    await db.exec(`create policy "leak" on public.teams for select
+      to authenticated using (true)`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 1 failed/);
+  });
+});
