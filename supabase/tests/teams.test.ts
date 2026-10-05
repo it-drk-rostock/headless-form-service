@@ -253,4 +253,17 @@ describe("manual RLS checklist", () => {
     );
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 14 failed/);
   });
+
+  it("catches an audit log that leaks to members", async () => {
+    await db.exec(`create policy "leak" on public.audit_log for select
+      to authenticated using (true)`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 16 failed/);
+  });
+
+  it("catches membership changes that are not recorded", async () => {
+    await db.exec(
+      "drop trigger team_members_audit_role_change on public.team_members",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 17 failed/);
+  });
 });

@@ -17,6 +17,10 @@ A person belonging to a team who can create, edit and publish that team's forms.
 **Super Admin**:
 A person with authority over every team, who creates teams and manages global settings.
 
+**Audit Log**:
+The append-only record of security-relevant actions (who did what, to which team's entities, and when), readable by a team's Team Admins and by Super Admins.
+_Avoid_: History, activity feed (form versions have their own history)
+
 ## Forms
 
 **Form**:

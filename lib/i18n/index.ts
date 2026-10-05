@@ -27,3 +27,14 @@ const dateFormat = new Intl.DateTimeFormat("de-DE", {
 export function formatDate(isoTimestamp: string): string {
   return dateFormat.format(new Date(isoTimestamp));
 }
+
+const dateTimeFormat = new Intl.DateTimeFormat("de-DE", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Europe/Berlin",
+});
+
+/** A timestamp as a German date and time, e.g. "05.10.2026, 00:30". */
+export function formatDateTime(isoTimestamp: string): string {
+  return dateTimeFormat.format(new Date(isoTimestamp));
+}

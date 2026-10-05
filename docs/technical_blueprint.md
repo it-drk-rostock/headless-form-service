@@ -132,7 +132,7 @@ A pass is valid when it is not revoked, not expired, and `max_uses IS NULL OR us
 `allowed_origins` (text[]), `allowed_recipient_domains` (text[]), `submit_rate_limit` (default 10/min/IP), `load_rate_limit` (default 60/min/IP).
 
 #### `audit_log`
-`id`, `team_id` (nullable), `actor_id`, `action`, `entity_type`, `entity_id`, `details` (JSONB, never submission data), `created_at`. Records publish/restore, recipient and form-setting changes, close/archive/delete, pass creation/revocation, membership and role changes.
+`id`, `team_id` (nullable), `actor_id` (nullable: system), `actor_email` (the actor's address when they acted), `action` (e.g. `member.added`), `entity_type`, `entity_id`, `details` (JSONB object, never submission data), `created_at`. Records publish/restore, recipient and form-setting changes, close/archive/delete, pass creation/revocation, membership and role changes. Append-only and without foreign keys, so entries outlive what they name. Written only through `private.record_audit()`, from triggers or database functions in the same transaction as the change.
 
 ---
 

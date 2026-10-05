@@ -1,19 +1,33 @@
 import { type MessageKey, t } from "../../lib/i18n/index.ts";
 import type { TeamSummary } from "../../lib/teams/types.ts";
 
-export type ModuleId = "forms" | "teams";
+export type ModuleId = "forms" | "teams" | "audit";
 
 export type DashboardModule = {
   id: ModuleId;
   href: `/${string}`;
   label: MessageKey;
+  superAdminOnly?: true;
 };
 
-/** Modules in rail order. Super Admin modules (audit log, settings) join once roles exist. */
+/** Modules in rail order. Settings (Super Admin) joins with ticket 20. */
 export const modules: readonly DashboardModule[] = [
   { id: "forms", href: "/forms", label: "nav.forms" },
   { id: "teams", href: "/teams", label: "nav.teams" },
+  {
+    id: "audit",
+    href: "/audit-log",
+    label: "nav.auditLog",
+    superAdminOnly: true,
+  },
 ];
+
+/** The rail's modules for this person. Pages check access themselves. */
+export function visibleModules(
+  isSuperAdmin: boolean,
+): readonly DashboardModule[] {
+  return modules.filter((module) => isSuperAdmin || !module.superAdminOnly);
+}
 
 export function activeModule(pathname: string): DashboardModule | undefined {
   return modules.find(

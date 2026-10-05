@@ -114,6 +114,16 @@ Team Admins manage their own team's members on `/teams/[id]`, and Super Admins m
 
 In the "Current setup: local testing" mode, the emails come from Supabase's built-in SMTP with Supabase's default templates. Those links do not go through `/auth/confirm`, so a newly invited person cannot set a password yet. Adding existing accounts and changing roles work. Invites and set-password links work end to end only after "Going live", step 3.
 
+### Audit log
+
+`public.audit_log` records security-relevant actions: who did what to which entity, in which team, and when. For now these are invites, role changes and removals of members.
+
+- Super Admins read every team's entries on `/audit-log`. Team Admins, and Super Admins too, read a team's entries at the bottom of `/teams/[id]`. Team Members see none.
+- Entries are written only by `private.record_audit(team, action, entity_type, entity_id, details)`. Signed-in people and the Data API cannot call it. Triggers and database functions call it, so the entry commits together with the change it records. The actor is always the signed-in person. Without one (service role, SQL editor) the actor is empty and the dashboard shows *System*.
+- Nobody can add, edit or delete entries through the Data API, not even with the secret key. A trigger also refuses edits and deletes from the table owner, who would have to drop it on purpose first.
+- `details` holds readable context, such as the member's address and role. It never holds submission data.
+- The audit log is part of `supabase/snippets/rls-checklist-teams.sql` (checks 16–19, and 9 for anon).
+
 ### Deploy to Cloudflare
 
 The dashboard runs as a Cloudflare Worker built with OpenNext (`wrangler.jsonc`, `open-next.config.ts`). Log in once per machine with `npx wrangler login`, then:

@@ -7,6 +7,8 @@ export const de = {
 
   "nav.forms": "Formulare",
   "nav.teams": "Teams",
+  "nav.auditLog": "Audit-Log",
+  "nav.allAuditEntries": "Alle Einträge",
   "nav.allForms": "Alle Formulare",
   "nav.allTeams": "Alle Teams",
   "nav.sectionTeams": "Teams",
@@ -153,4 +155,29 @@ export const de = {
   "members.errorTooManyEmails":
     "Gerade wurden zu viele E-Mails gesendet. Bitte in einigen Minuten erneut versuchen.",
   "members.errorGeneric": "Das hat nicht geklappt. Bitte erneut versuchen.",
+
+  "audit.title": "Audit-Log",
+  "audit.intro":
+    "Sicherheitsrelevante Änderungen aller Teams, neueste zuerst. Einträge lassen sich nicht bearbeiten oder löschen.",
+  "audit.teamIntro":
+    "Sicherheitsrelevante Änderungen in diesem Team, neueste zuerst. Nur für Team-Admins und Super Admins sichtbar.",
+  "audit.empty": "Noch keine Einträge.",
+  "audit.columnTime": "Zeitpunkt",
+  "audit.columnTeam": "Team",
+  "audit.columnActor": "Durch",
+  "audit.columnAction": "Aktion",
+  "audit.columnDetails": "Details",
+  "audit.actorSystem": "System",
+  "audit.deletedAccount": "Gelöschtes Konto",
+  "audit.deletedTeam": "Gelöschtes Team",
+  "audit.noTeam": "–",
+  "audit.action.memberAdded": "Mitglied hinzugefügt",
+  "audit.action.memberRoleChanged": "Rolle geändert",
+  "audit.action.memberRemoved": "Mitglied entfernt",
+  "audit.summary.memberAdded": "{who} als {role}",
+  "audit.summary.memberRoleChanged": "{who}: {from} → {to}",
+  "audit.summary.memberRemoved": "{who} ({role})",
+  "audit.newer": "Neuere",
+  "audit.older": "Ältere",
+  "audit.pageOf": "Seite {page} von {pages}",
 } as const satisfies Record<string, string>;

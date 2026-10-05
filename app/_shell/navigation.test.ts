@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeModule, breadcrumbs } from "./navigation.ts";
+import { activeModule, breadcrumbs, visibleModules } from "./navigation.ts";
 
 describe("activeModule", () => {
   it("finds the module whose route the path is in", () => {
@@ -7,6 +7,10 @@ describe("activeModule", () => {
     expect(activeModule("/forms/abc-123")?.id).toBe("forms");
     expect(activeModule("/teams")?.id).toBe("teams");
     expect(activeModule("/teams/42")?.id).toBe("teams");
+  });
+
+  it("finds the audit log", () => {
+    expect(activeModule("/audit-log")?.id).toBe("audit");
   });
 
   it("does not match a path that only shares a prefix", () => {
@@ -40,5 +44,16 @@ describe("breadcrumbs", () => {
 
   it("shows nothing outside the modules", () => {
     expect(breadcrumbs("/", teams)).toEqual([]);
+  });
+});
+
+describe("visibleModules", () => {
+  it("shows the audit log to Super Admins only", () => {
+    expect(visibleModules(true).map((m) => m.id)).toEqual([
+      "forms",
+      "teams",
+      "audit",
+    ]);
+    expect(visibleModules(false).map((m) => m.id)).toEqual(["forms", "teams"]);
   });
 });

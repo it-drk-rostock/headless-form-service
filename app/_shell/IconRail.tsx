@@ -1,27 +1,30 @@
 "use client";
 
 import { Box, Stack, Tooltip, UnstyledButton } from "@mantine/core";
-import { IconForms, IconUsersGroup } from "@tabler/icons-react";
+import { IconForms, IconHistory, IconUsersGroup } from "@tabler/icons-react";
 import Link from "next/link";
 import { t } from "@/lib/i18n/index.ts";
 import { LogoTile } from "../_components/LogoTile.tsx";
 import classes from "./DashboardShell.module.css";
-import { type ModuleId, modules } from "./navigation.ts";
+import { type ModuleId, visibleModules } from "./navigation.ts";
 import { type ShellUser, UserMenu } from "./UserMenu.tsx";
 
 const moduleIcons: Record<ModuleId, typeof IconForms> = {
   forms: IconForms,
   teams: IconUsersGroup,
+  audit: IconHistory,
 };
 
 export function IconRail({
   activeId,
   width,
   user,
+  isSuperAdmin,
 }: {
   activeId: ModuleId | undefined;
   width: number;
   user: ShellUser;
+  isSuperAdmin: boolean;
 }) {
   return (
     <Stack
@@ -36,7 +39,7 @@ export function IconRail({
       <Box mb="sm">
         <LogoTile />
       </Box>
-      {modules.map((module) => {
+      {visibleModules(isSuperAdmin).map((module) => {
         const Icon = moduleIcons[module.id];
         const label = t(module.label);
         return (

@@ -21,10 +21,12 @@ const SIDEBAR_INLINE_FROM = em(992);
  */
 export function DashboardShell({
   user,
+  isSuperAdmin,
   teams,
   children,
 }: {
   user: ShellUser;
+  isSuperAdmin: boolean;
   teams: ShellTeam[];
   children: React.ReactNode;
 }) {
@@ -63,6 +65,7 @@ export function DashboardShell({
             activeId={currentModule?.id}
             width={RAIL_WIDTH}
             user={user}
+            isSuperAdmin={isSuperAdmin}
           />
           {sidebarOpen && (
             <Box visibleFrom="md" w={SIDEBAR_WIDTH}>

@@ -14,6 +14,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconFiles,
+  IconHistory,
   IconLayoutSidebarLeftCollapse,
   IconUsers,
   IconUsersGroup,
@@ -58,7 +59,15 @@ export function ModuleSidebar({
         </ActionIcon>
       </Group>
       <Box p="xs">
-        {activeId === "teams" ? (
+        {activeId === "audit" ? (
+          <SidebarItem
+            href="/audit-log"
+            label={t("nav.allAuditEntries")}
+            icon={<IconHistory size={16} stroke={1.5} />}
+            pathname={pathname}
+            onClick={onNavigate}
+          />
+        ) : activeId === "teams" ? (
           <SidebarItem
             href="/teams"
             label={t("nav.allTeams")}

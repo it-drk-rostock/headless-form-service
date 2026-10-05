@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams and memberships (tickets 04, 05). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships and the audit log (tickets 04-06). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 15 of 15 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 19 of 19 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -81,6 +81,11 @@ begin
      is distinct from array['00000000-0000-4000-8000-00000000c002'::uuid,
                             '00000000-0000-4000-8000-00000000c003'::uuid] then
     raise exception 'RLS check 11 failed: Member A sees profiles outside team A';
+  end if;
+
+  -- 16. A member sees no audit log entries, not even of their own team.
+  if exists (select 1 from public.audit_log) then
+    raise exception 'RLS check 16 failed: Member A sees audit log entries';
   end if;
 end $$;
 
@@ -165,6 +170,37 @@ begin
     raise exception 'RLS check 14 failed: the last Team Admin of team A left';
   exception when sqlstate 'HF001' then null;
   end;
+
+  -- 17. A Team Admin sees their own team's log, including their role changes
+  -- from check 12, and nothing of other teams.
+  if (select count(*) from public.audit_log
+      where action = 'member.role_changed'
+        and actor_id = '00000000-0000-4000-8000-00000000c002'
+        and entity_id = '00000000-0000-4000-8000-00000000c003') <> 2 then
+    raise exception 'RLS check 17 failed: the role changes of check 12 are not in the audit log';
+  end if;
+  if exists (select 1 from public.audit_log
+             where team_id is distinct from '00000000-0000-4000-8000-0000000000a1') then
+    raise exception 'RLS check 17 failed: the Team Admin sees audit log entries of other teams';
+  end if;
+
+  -- 18. Nobody signed in can add, edit or delete audit log entries.
+  begin
+    insert into public.audit_log (team_id, action, entity_type) values
+      ('00000000-0000-4000-8000-0000000000a1', 'rls.check', 'check');
+    raise exception 'RLS check 18 failed: the Team Admin added an audit log entry';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.audit_log set action = 'rls.check';
+    raise exception 'RLS check 18 failed: the Team Admin edited the audit log';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.audit_log;
+    raise exception 'RLS check 18 failed: the Team Admin deleted audit log entries';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- As the Super Admin (member of no team) --------------------------------------
@@ -202,6 +238,12 @@ begin
   if changed <> 1 then
     raise exception 'RLS check 15 failed: the Super Admin could not remove the last Team Admin';
   end if;
+
+  -- 19. A Super Admin sees the audit log of every team.
+  if (select count(distinct team_id) from public.audit_log where team_id in (
+        '00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000000b1')) <> 2 then
+    raise exception 'RLS check 19 failed: the Super Admin does not see every team''s audit log';
+  end if;
 end $$;
 
 -- As a visitor (anon) ---------------------------------------------------------
@@ -211,7 +253,7 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 do $$
 begin
-  -- 9. The anon role cannot read teams or memberships (ADR-0004).
+  -- 9. The anon role cannot read teams, memberships or the audit log (ADR-0004).
   begin
     perform 1 from public.teams;
     raise exception 'RLS check 9 failed: anon can read teams';
@@ -222,11 +264,16 @@ begin
     raise exception 'RLS check 9 failed: anon can read team members';
   exception when insufficient_privilege then null;
   end;
+  begin
+    perform 1 from public.audit_log;
+    raise exception 'RLS check 9 failed: anon can read the audit log';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 15 of 15 checks' as result;
+select 'RLS checklist passed: 19 of 19 checks' as result;
 
 rollback;

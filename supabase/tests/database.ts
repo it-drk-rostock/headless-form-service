@@ -27,7 +27,7 @@ const SUPABASE_STUB = `
     raw_user_meta_data jsonb not null default '{}'
   );
   create function auth.uid() returns uuid language sql stable as $$
-    select nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid
+    select nullif(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '')::uuid
   $$;
   grant execute on function auth.uid() to anon, authenticated, service_role;
 `;
@@ -49,24 +49,53 @@ export function readSnippet(name: string): string {
   return readFileSync(join(supabaseDir, "snippets", name), "utf8");
 }
 
-/** Runs `query` as a signed-in person (or anon), as PostgREST would, and rolls back. */
-export async function queryAs<T>(
+type Who = { userId: string } | "anon" | "service";
+
+/** Runs `query` as `who` would through PostgREST; rolls back unless `commit`. */
+async function runAs<T>(
   db: PGlite,
-  who: { userId: string } | "anon",
+  who: Who,
   query: string,
-  params: unknown[] = [],
+  params: unknown[],
+  commit: boolean,
 ): Promise<T[]> {
   return db.transaction(async (tx) => {
-    const role = who === "anon" ? "anon" : "authenticated";
-    const claims = who === "anon" ? { role } : { role, sub: who.userId };
+    const role =
+      who === "anon"
+        ? "anon"
+        : who === "service"
+          ? "service_role"
+          : "authenticated";
+    const claims =
+      typeof who === "object" ? { role, sub: who.userId } : { role };
     await tx.query("select set_config('request.jwt.claims', $1, true)", [
       JSON.stringify(claims),
     ]);
     await tx.exec(`set local role ${role}`);
     const { rows } = await tx.query<T>(query, params);
-    await tx.rollback();
+    if (!commit) await tx.rollback();
     return rows;
   });
+}
+
+/** Runs `query` as a signed-in person (or anon), as PostgREST would, and rolls back. */
+export function queryAs<T>(
+  db: PGlite,
+  who: { userId: string } | "anon",
+  query: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  return runAs<T>(db, who, query, params, false);
+}
+
+/** Like `queryAs`, but keeps the changes, so their side effects can be read afterwards. */
+export function commitAs<T>(
+  db: PGlite,
+  who: { userId: string } | "service",
+  query: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  return runAs<T>(db, who, query, params, true);
 }
 
 export async function createAuthUser(

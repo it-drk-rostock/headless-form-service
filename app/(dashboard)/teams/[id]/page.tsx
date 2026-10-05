@@ -2,10 +2,13 @@ import { Alert, Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { parsePage } from "@/lib/audit/page.ts";
+import { listAuditEntries } from "@/lib/audit/queries.ts";
 import { requireProfile } from "@/lib/auth/profile.ts";
 import { formatDate, t } from "@/lib/i18n/index.ts";
 import { listMembers } from "@/lib/members/queries.ts";
 import { getTeam } from "@/lib/teams/queries.ts";
+import { AuditLog } from "../../../_components/AuditLog.tsx";
 import { ContentPanel } from "../../../_components/ContentPanel.tsx";
 import { RenameTeamButton } from "../TeamNameDrawer.tsx";
 import { TeamRoleBadge } from "../TeamRoleBadge.tsx";
@@ -21,9 +24,13 @@ export async function generateMetadata({
 
 /**
  * A team's details and members. Teams the person does not belong to are not
- * found (RLS). Team Admins and Super Admins also manage the members.
+ * found (RLS). Team Admins and Super Admins also manage the members and
+ * read the team's audit log (paged with `?seite=`).
  */
-export default async function TeamPage({ params }: PageProps<"/teams/[id]">) {
+export default async function TeamPage({
+  params,
+  searchParams,
+}: PageProps<"/teams/[id]">) {
   const { id } = await params;
   const [profile, team, members] = await Promise.all([
     requireProfile(),
@@ -32,6 +39,11 @@ export default async function TeamPage({ params }: PageProps<"/teams/[id]">) {
   ]);
   if (!team) notFound();
   const canManage = profile.isSuperAdmin || team.role === "team_admin";
+  const auditPage = parsePage((await searchParams).seite);
+  // RLS returns nothing to Team Members anyway; this saves the query.
+  const audit = canManage
+    ? await listAuditEntries({ teamId: team.id, page: auditPage })
+    : null;
 
   return (
     <ContentPanel
@@ -88,6 +100,24 @@ export default async function TeamPage({ params }: PageProps<"/teams/[id]">) {
         <Text fz={13} c="gray.6" mt="sm">
           {t("members.empty")}
         </Text>
+      )}
+
+      {audit && (
+        <>
+          <Title order={2} fz={16} mt={40} id="audit-log">
+            {t("audit.title")}
+          </Title>
+          <Text fz={13} c="gray.6" mt={4} maw={800}>
+            {t("audit.teamIntro")}
+          </Text>
+          <AuditLog
+            log={audit}
+            page={auditPage}
+            basePath={`/teams/${team.id}`}
+            anchor="audit-log"
+            showTeam={false}
+          />
+        </>
       )}
     </ContentPanel>
   );
