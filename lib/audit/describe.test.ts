@@ -101,15 +101,27 @@ describe("describeAuditEntry", () => {
     ).toBe("Kurse: b@drk-rostock.de, a@drk-rostock.de");
   });
 
-  it("shows actions it does not know yet as they are stored", () => {
+  it("describes publishing by form name and version", () => {
     expect(
       describeAuditEntry({
         action: "form.published",
-        details: { version: 3, name: "Kontakt" },
+        details: { name: "Kontakt", version: 3, changelog: "Neue Frage" },
       }),
     ).toEqual({
-      action: "form.published",
-      summary: "version: 3, name: Kontakt",
+      action: "Formular veröffentlicht",
+      summary: "Kontakt: Version 3",
+    });
+  });
+
+  it("shows actions it does not know yet as they are stored", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.closed",
+        details: { name: "Kontakt", closed: true },
+      }),
+    ).toEqual({
+      action: "form.closed",
+      summary: "name: Kontakt, closed: true",
     });
   });
 });

@@ -1,4 +1,5 @@
 import type { MessageKey } from "../i18n/index.ts";
+import { type ProfileNameRow, profileName } from "../shared/profile.ts";
 
 /**
  * Question types the designer does not offer: submissions travel through
@@ -26,7 +27,7 @@ export const DRAFT_STAMP_COLUMNS =
 export type DraftStampRow = {
   created_at: string;
   draft_updated_at: string;
-  editor: { full_name: string; email: string } | null;
+  editor: ProfileNameRow | null;
 };
 
 export function toDraftStamp(row: DraftStampRow): DraftStamp {
@@ -34,7 +35,7 @@ export function toDraftStamp(row: DraftStampRow): DraftStamp {
   const neverSaved = !row.editor && row.draft_updated_at === row.created_at;
   return {
     savedAt: neverSaved ? null : row.draft_updated_at,
-    savedBy: row.editor ? row.editor.full_name || row.editor.email : null,
+    savedBy: profileName(row.editor),
   };
 }
 

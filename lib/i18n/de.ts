@@ -85,6 +85,29 @@ export const de = {
   "forms.draftNeverSaved": "Entwurf noch nicht gespeichert",
   "forms.draftSaved": "Entwurf gespeichert am {at}",
   "forms.draftSavedBy": "Entwurf gespeichert am {at} von {by}",
+  "forms.notPublished": "Noch nicht veröffentlicht",
+  "forms.notPublishedHint":
+    "Besucher sehen das Formular erst nach dem ersten Veröffentlichen.",
+  "forms.version": "Version {version}",
+  "forms.publishedVersion": "Version {version}, veröffentlicht am {at}",
+  "forms.publishedVersionBy":
+    "Version {version}, veröffentlicht am {at} von {by}",
+  "forms.publish": "Veröffentlichen",
+  "forms.publishTitle": "Entwurf veröffentlichen",
+  "forms.publishText":
+    "Der Entwurf, Fragen und E-Mail-Vorlage, wird als Version {version} gespeichert. Besucher sehen ab sofort diese Version.",
+  "forms.publishWaitsForSave":
+    "Der Designer hat Änderungen, die noch nicht gespeichert sind. Veröffentlichen ist möglich, sobald sie gespeichert sind.",
+  "forms.publishNoRecipients":
+    "Dieses Formular hat noch keine Empfänger. Einsendungen werden erst zugestellt, wenn unter Einstellungen Empfänger eingetragen sind.",
+  "forms.changelog": "Änderungsnotiz",
+  "forms.changelogHint":
+    "Optional. Was sich gegenüber der vorigen Version geändert hat, höchstens {max} Zeichen.",
+  "forms.publishSubmit": "Veröffentlichen",
+  "forms.published":
+    "Version {version} ist veröffentlicht. Besucher sehen ab sofort diese Version.",
+  "forms.cancel": "Abbrechen",
+  "forms.close": "Schließen",
   "forms.recipients": "Empfänger",
   "forms.recipientsHint":
     "Diese Adressen erhalten jede Einsendung als E-Mail. Eine Adresse pro Zeile, höchstens {maxRecipients}.",
@@ -95,6 +118,7 @@ export const de = {
   "forms.detailTeam": "Team",
   "forms.detailStatus": "Status",
   "forms.detailCreated": "Angelegt am",
+  "forms.detailVersion": "Aktuelle Version",
   "forms.notFoundTitle": "Formular nicht gefunden",
   "forms.notFoundHint":
     "Dieses Formular gibt es nicht, oder es ist nur für die Mitglieder seines Teams sichtbar.",
@@ -105,6 +129,10 @@ export const de = {
     "Der Entwurf ist ungültig und konnte nicht gespeichert werden.",
   "forms.errorDraftQuestionType":
     "Datei- und Unterschriftsfragen sind nicht erlaubt. Bitte entfernen und erneut speichern.",
+  "forms.errorChangelogTooLong":
+    "Die Änderungsnotiz darf höchstens {max} Zeichen lang sein.",
+  "forms.errorPublishEmpty":
+    "Der Entwurf hat noch keine Fragen. Bitte im Designer mindestens eine Frage anlegen.",
   "forms.errorRecipientInvalid":
     "„{address}“ ist keine gültige E-Mail-Adresse.",
   "forms.errorTooManyRecipients":
@@ -239,6 +267,8 @@ export const de = {
   "audit.summary.formCreated": "{name}",
   "audit.summary.formRenamed": "{from} → {to}",
   "audit.summary.formRecipientsChanged": "{name}: {changes}",
+  "audit.action.formPublished": "Formular veröffentlicht",
+  "audit.summary.formPublished": "{name}: Version {version}",
   "audit.summary.none": "keine",
   "audit.newer": "Neuere",
   "audit.older": "Ältere",

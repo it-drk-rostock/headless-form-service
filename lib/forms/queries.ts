@@ -10,6 +10,12 @@ import {
   toDraftStamp,
 } from "./draft.ts";
 import { isFormId } from "./id.ts";
+import {
+  CURRENT_VERSION_COLUMNS,
+  type CurrentVersion,
+  type CurrentVersionRow,
+  toCurrentVersion,
+} from "./publish.ts";
 import { type FormDetails, type FormSummary, formStatus } from "./types.ts";
 
 type FormRow = {
@@ -79,6 +85,7 @@ export const getForm = cache(
     return {
       ...toSummary(data),
       recipients: data.recipients,
+      currentVersion: data.current_version,
       createdAt: data.created_at,
     };
   },
@@ -108,4 +115,28 @@ export async function getFormDraft(id: string): Promise<FormDraft | null> {
   }
   if (!data) return null;
   return { schema: data.draft_schema, stamp: toDraftStamp(data) };
+}
+
+/**
+ * The current version of a form with who published it and when, or null
+ * while the form is not yet published.
+ */
+export async function getCurrentVersion(
+  form: Pick<FormDetails, "id" | "currentVersion">,
+): Promise<CurrentVersion | null> {
+  if (form.currentVersion === null) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("form_versions")
+    .select(CURRENT_VERSION_COLUMNS)
+    .eq("form_id", form.id)
+    .eq("version", form.currentVersion)
+    .single()
+    .overrideTypes<CurrentVersionRow, { merge: false }>();
+  if (error) {
+    throw new Error(
+      `Version ${form.currentVersion} of form ${form.id} could not be loaded: ${error.message}`,
+    );
+  }
+  return toCurrentVersion(data);
 }

@@ -12,6 +12,7 @@ import {
   DISABLED_QUESTION_TYPES,
   type DraftSchema,
 } from "@/lib/forms/draft.ts";
+import { useDraftStatus } from "./DraftStatus.tsx";
 
 // The questions are written in German, so the survey's own texts (buttons,
 // messages) in the preview are German too. The embed must use the same
@@ -42,6 +43,8 @@ export default function DraftCreator({
 
   // Changes made, and the last of them a successful save covered.
   const changes = useRef({ made: 0, saved: 0 });
+  // A state setter, so the same function for Creator's callbacks below.
+  const { setUnsaved } = useDraftStatus();
 
   const [creator] = useState(() => {
     const creator = new SurveyCreator({
@@ -59,6 +62,7 @@ export default function DraftCreator({
     creator.JSON = schema;
     creator.onModified.add(() => {
       changes.current.made += 1;
+      setUnsaved(true);
     });
     creator.saveSurveyFunc = (
       saveNo: number,
@@ -73,6 +77,7 @@ export default function DraftCreator({
               changes.current.saved,
               changesAtSave,
             );
+            setUnsaved(changes.current.made > changes.current.saved);
           }
           callback(saveNo, result.error === null);
           onSavedRef.current(result);

@@ -71,7 +71,7 @@ describe("a new form", () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it("starts as an open, public, unpublished draft without recipients", async () => {
+  it("starts as an open, public, unpublished draft without recipients, with the default email template", async () => {
     const id = await createForm(firstAid, "Kursanmeldung");
     const { rows } = await db.query(
       `select access_type, is_closed, archived_at, recipients::text[], current_version,
@@ -88,7 +88,7 @@ describe("a new form", () => {
         current_version: null,
         turnstile_enabled: true,
         draft_schema: {},
-        draft_email_template: {},
+        draft_email_template: expect.objectContaining({ mode: "standard" }),
       },
     ]);
   });

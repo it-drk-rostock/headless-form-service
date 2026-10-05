@@ -16,6 +16,7 @@ import {
 } from "./draft.ts";
 import { isFormId } from "./id.ts";
 import { formNameProblem } from "./name.ts";
+import { changelogProblem, normalizeChangelog } from "./publish.ts";
 import { parseRecipients } from "./recipients.ts";
 
 /**
@@ -30,6 +31,7 @@ export type FormActionState = {
 
 // The database refuses with "insufficient_privilege" when RLS rejects a write.
 const INSUFFICIENT_PRIVILEGE = "42501";
+const DRAFT_WITHOUT_QUESTIONS = "HF003"; // raised by public.publish_form()
 
 /**
  * Creates a form for one of the person's teams and opens it. Any member of
@@ -118,6 +120,40 @@ export async function saveDraft(
   if (data.length === 0) return { error: "forms.errorForbidden" };
 
   return { error: null, stamp: toDraftStamp(data[0]) };
+}
+
+export type PublishResult =
+  | { error: MessageKey }
+  | { error: null; version: number };
+
+/**
+ * Publishes the form's draft: its questions and email template become the
+ * next form version, which visitors are served from now on. The database
+ * does this in one transaction, with its audit log entry.
+ */
+export async function publishForm(
+  id: string,
+  changelog: string,
+): Promise<PublishResult> {
+  const problem = changelogProblem(changelog);
+  if (problem) return { error: problem };
+  if (!isFormId(id)) return { error: "forms.errorForbidden" };
+
+  await requireProfile();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("publish_form", {
+    form: id,
+    changelog: normalizeChangelog(changelog),
+  });
+  if (error) {
+    if (error.code === DRAFT_WITHOUT_QUESTIONS) {
+      return { error: "forms.errorPublishEmpty" };
+    }
+    return { error: writeError(error) };
+  }
+
+  refresh();
+  return { error: null, version: data as number };
 }
 
 function writeError(error: PostgrestError): MessageKey {

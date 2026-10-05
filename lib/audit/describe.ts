@@ -48,6 +48,14 @@ const actions: Record<
         changes: recipientChanges(texts(d.from), texts(d.to)),
       }),
   },
+  "form.published": {
+    label: t("audit.action.formPublished"),
+    summary: (d) =>
+      t("audit.summary.formPublished", {
+        name: text(d.name),
+        version: text(d.version),
+      }),
+  },
 };
 
 /**

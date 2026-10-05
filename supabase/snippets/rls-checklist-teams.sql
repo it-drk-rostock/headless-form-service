@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms and the draft (tickets 04-08). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft and publishing (tickets 04-09). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 27 of 27 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 31 of 31 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -148,6 +148,41 @@ begin
     raise exception 'RLS check 27 failed: Member A saved a file question into the draft';
   exception when check_violation then null;
   end;
+
+  -- 28. A member publishes their own team's form: the draft becomes version 1
+  -- and the current version. Another team's form they cannot publish.
+  update public.forms
+  set draft_schema = '{"pages":[{"name":"p","elements":[{"type":"text","name":"q"}]}]}'
+  where id = '00000000-0000-4000-8000-0000000000f1';
+  if public.publish_form('00000000-0000-4000-8000-0000000000f1', 'RLS-Check') <> 1 then
+    raise exception 'RLS check 28 failed: Member A''s publish of form A is not version 1';
+  end if;
+  if (select current_version from public.forms
+      where id = '00000000-0000-4000-8000-0000000000f1') is distinct from 1
+     or (select schema from public.form_versions
+         where form_id = '00000000-0000-4000-8000-0000000000f1' and version = 1)
+        is distinct from '{"pages":[{"name":"p","elements":[{"type":"text","name":"q"}]}]}'::jsonb then
+    raise exception 'RLS check 28 failed: Member A''s publish did not make the draft the current version';
+  end if;
+  begin
+    perform public.publish_form('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 28 failed: Member A published team B''s form';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- 29. Form versions cannot be written directly, only by publishing.
+  begin
+    update public.form_versions set changelog = 'RLS-Check geändert'
+    where form_id = '00000000-0000-4000-8000-0000000000f1';
+    raise exception 'RLS check 29 failed: Member A changed a form version';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    insert into public.form_versions (form_id, version, schema, email_template)
+    values ('00000000-0000-4000-8000-0000000000f1', 2, '{}', '{}');
+    raise exception 'RLS check 29 failed: Member A inserted a form version';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- As Member B ---------------------------------------------------------------
@@ -166,6 +201,12 @@ begin
      or exists (select 1 from public.forms
                 where id = '00000000-0000-4000-8000-0000000000f1') then
     raise exception 'RLS check 4 failed: Member B sees team A';
+  end if;
+
+  -- 30. A member sees no form versions of other teams.
+  if exists (select 1 from public.form_versions
+             where form_id = '00000000-0000-4000-8000-0000000000f1') then
+    raise exception 'RLS check 30 failed: Member B sees team A''s form versions';
   end if;
 end $$;
 
@@ -273,6 +314,14 @@ begin
     raise exception 'RLS check 23 failed: the recipient change of check 22 is not in the audit log';
   end if;
 
+  -- 31. A Team Admin sees the publish of check 28 in the log.
+  if not exists (select 1 from public.audit_log
+                 where action = 'form.published'
+                   and actor_id = '00000000-0000-4000-8000-00000000c003'
+                   and entity_id = '00000000-0000-4000-8000-0000000000f1') then
+    raise exception 'RLS check 31 failed: the publish of check 28 is not in the audit log';
+  end if;
+
   -- 24. Nobody signed in moves a form to another team, deletes it, sets
   -- what only publishing, closing and archiving may set, or who saved the draft.
   begin
@@ -356,7 +405,8 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 do $$
 begin
-  -- 9. The anon role cannot read teams, memberships, the audit log or forms (ADR-0004).
+  -- 9. The anon role cannot read teams, memberships, the audit log, forms or
+  -- form versions, nor publish (ADR-0004).
   begin
     perform 1 from public.teams;
     raise exception 'RLS check 9 failed: anon can read teams';
@@ -377,11 +427,21 @@ begin
     raise exception 'RLS check 9 failed: anon can read forms';
   exception when insufficient_privilege then null;
   end;
+  begin
+    perform 1 from public.form_versions;
+    raise exception 'RLS check 9 failed: anon can read form versions';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.publish_form('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 9 failed: anon can publish forms';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 27 of 27 checks' as result;
+select 'RLS checklist passed: 31 of 31 checks' as result;
 
 rollback;

@@ -289,4 +289,15 @@ describe("manual RLS checklist", () => {
     );
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 27 failed/);
   });
+
+  it("catches form versions that can be changed directly", async () => {
+    await db.exec("grant update on public.form_versions to authenticated");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 29 failed/);
+  });
+
+  it("catches form versions that leak to other teams", async () => {
+    await db.exec(`create policy "leak" on public.form_versions for select
+      to authenticated using (true)`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 30 failed/);
+  });
 });

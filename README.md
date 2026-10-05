@@ -133,6 +133,15 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 - Creating, renaming and recipient changes are recorded in the audit log by database triggers, with the old and new value.
 - Forms are part of `supabase/snippets/rls-checklist-teams.sql` (checks 20–25, plus 4 and 9).
 
+### Publishing
+
+*Veröffentlichen* on `/forms/[id]` freezes the draft's questions and email template into the next row of `public.form_versions` (1, 2, 3, … per form) and makes it the form's current version. Visitors are only ever served the current version.
+
+- Publishing goes only through `public.publish_form(form, changelog)`. It locks the form, inserts the version, moves `forms.current_version` and writes the `form.published` audit entry in one transaction. Members of the form's team and Super Admins may call it; a draft without questions is refused.
+- Versions are immutable. Nobody writes `form_versions` through the Data API, not even with the secret key, and triggers refuse edits, deletes and out-of-sequence numbers from the table owner too. Versions go only with their form, when it is deleted for good.
+- A new form's draft starts with the default email template: Standard Layout, a greeting and `{{answers_table}}`.
+- Publishing is part of `supabase/snippets/rls-checklist-teams.sql` (checks 28–31, plus 9).
+
 ### Deploy to Cloudflare
 
 The dashboard runs as a Cloudflare Worker built with OpenNext (`wrangler.jsonc`, `open-next.config.ts`). Log in once per machine with `npx wrangler login`, then:
