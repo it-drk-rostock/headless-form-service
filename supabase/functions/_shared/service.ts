@@ -38,3 +38,13 @@ export async function readAllowedOrigins(
   if (error) throw error;
   return data?.allowed_origins ?? [];
 }
+
+/**
+ * Where QStash delivers queued submissions. `/submit-form` publishes to it
+ * and `/dispatch-email` checks QStash's signature against it, so both must
+ * build it the same way.
+ */
+export function dispatchEmailUrl(): string {
+  return new URL("/functions/v1/dispatch-email", Deno.env.get("SUPABASE_URL"))
+    .href;
+}

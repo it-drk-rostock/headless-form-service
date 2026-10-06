@@ -251,6 +251,7 @@ There is a single cloud environment ([ADR-0006](./adr/0006-single-cloud-environm
 | `SUBMISSION_ENCRYPTION_KEYS` | `/submit-form`, `/dispatch-email` |
 | `TURNSTILE_SECRET_KEY` | `/submit-form` |
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | `/dispatch-email` |
+| `NOTIFICATION_SENDER_EMAIL` (the sender address, validated in Mailjet) | `/dispatch-email` |
 | `N8N_INTEGRATION_KEY` | `/generate-form-pass` |
 | `SUPABASE_AUTH_SMTP_USER`, `SUPABASE_AUTH_SMTP_PASS`, `SUPABASE_AUTH_SMTP_ADMIN_EMAIL` (IONOS) | Supabase Auth settings, set via `supabase config push` |
 

@@ -1,7 +1,11 @@
 // Thin Deno entry point: wire real dependencies into the portable handler.
 // All logic lives in handler.ts, which is tested under Vitest with fakes.
 import { Client } from "npm:@upstash/qstash@2.12.0";
-import { createServiceClient, readAllowedOrigins } from "../_shared/service.ts";
+import {
+  createServiceClient,
+  dispatchEmailUrl,
+  readAllowedOrigins,
+} from "../_shared/service.ts";
 import {
   encryptSubmission,
   parseEncryptionKeys,
@@ -27,11 +31,8 @@ const qstash = new Client({
   // 12 s). The deduplication ID makes a retried publish safe.
   retry: { retries: 2 },
 });
-// Where QStash delivers each submission (ticket 13).
-const dispatchUrl = new URL(
-  "/functions/v1/dispatch-email",
-  Deno.env.get("SUPABASE_URL"),
-).href;
+// Where QStash delivers each submission.
+const dispatchUrl = dispatchEmailUrl();
 
 Deno.serve((request) =>
   handleSubmitForm(request, {

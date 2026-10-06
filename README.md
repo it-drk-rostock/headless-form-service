@@ -160,7 +160,7 @@ The embed sends a completed form with `POST /functions/v1/submit-form` (`supabas
 - The function writes a `queued` row to `public.form_stats` under the submission ID. The answers are stored nowhere. It encrypts `{ answers, pass_id }` with AES-256-GCM and publishes only the IDs and the ciphertext to QStash, with the submission ID as deduplication ID and 3 retries (ADR-0001). The ciphertext is bound to the submission, form and version, so it cannot be moved to another message.
 - If publishing fails, the row is removed and the answer is 503 `queue_unavailable`; the visitor can send again with the same ID. A submission ID whose message QStash has confirmed gets 202 without publishing again. One whose publish was never confirmed (say, the row could not be removed) is published again, and QStash's deduplication keeps that to one message.
 - The answer to an accepted submission is 202. The embed then shows SurveyJS's completion text, and otherwise a German error inside the form, which stays open for another try.
-- QStash delivers to `/functions/v1/dispatch-email`, which ticket 13 adds. Until it is deployed, QStash's deliveries fail, and after the retries the messages land in the dead-letter queue.
+- QStash delivers to `/functions/v1/dispatch-email` (see *Delivering submissions* below).
 
 The function needs two secrets, set once with the CLI (they are never in `.env*` files):
 
@@ -173,6 +173,29 @@ npx supabase secrets set SUBMISSION_ENCRYPTION_KEYS=k1:<output of: openssl rand 
 ```
 
 `SUBMISSION_ENCRYPTION_KEYS` is a comma-separated list of `id:base64key`, each key 32 random bytes. The first key encrypts; all of them decrypt. To rotate, put a new key in front (`k2:<new>,k1:<old>`) and keep the old one for at least the 7 days QStash keeps dead-lettered messages (blueprint §4.5). Only the edge functions hold the keys. QStash's default URL is its EU region; `QSTASH_URL` overrides it, and must stay an EU one (ADR-0002).
+
+### Delivering submissions
+
+QStash delivers each queued submission to `POST /functions/v1/dispatch-email` (`supabase/functions/dispatch-email/`, blueprint §4.4). Only QStash can call it:
+
+- A request without a valid `Upstash-Signature` for exactly this URL and body gets 401 `signature_invalid`. The function has `verify_jwt = false`, since QStash sends no Supabase JWT.
+- It decrypts the answers, then loads the form's name and recipients and the submitted version's questions and email template (`public.dispatch_submission`). Recipients take effect at once, also for submissions already queued; the template is the version's (ADR-0003). An archived form still gets the submissions it accepted.
+- The shared renderer (`lib/shared/notification.ts`) fills `{{form.name}}`, `{{submitted_at}}` (de-DE, German time) and `{{answers_table}}`. Every inserted value is HTML-escaped; the template's own HTML is trusted. The subject is plain text without the answers table. Other placeholders stay as they are until tickets 17 and 28.
+- One email goes through Mailjet's Send API v3.1 to all of the form's recipients, from `NOTIFICATION_SENDER_EMAIL` with the name *DRK Rostock Formular-Service* (the form's own sender name comes with ticket 19). Its Mailjet `CustomID` is the submission ID.
+- Then `form_stats.status` becomes `sent`. A redelivery of a submission already `sent` answers 200 without a second email. A submission whose stats row is gone is sent all the same.
+- Anything other than 2xx makes QStash retry: 502 `mail_failed` when Mailjet refuses, 404 `form_not_found`, 422 for a form without recipients, an unreadable template or a ciphertext that cannot be decrypted, 500 otherwise. After the retries, the message lands in the dead-letter queue; marking it failed is ticket 30.
+
+The function needs these secrets besides `SUBMISSION_ENCRYPTION_KEYS` (the same value as for `/submit-form`):
+
+```bash
+npx supabase secrets set QSTASH_CURRENT_SIGNING_KEY=<from the Upstash console> QSTASH_NEXT_SIGNING_KEY=<from the Upstash console>
+```
+
+```bash
+npx supabase secrets set MAILJET_API_KEY=<key> MAILJET_SECRET_KEY=<secret> NOTIFICATION_SENDER_EMAIL=<sender address validated in Mailjet>
+```
+
+The sender address must be validated in Mailjet, and its domain needs SPF and DKIM for Mailjet (`.scratch/sender-domain/spec.md`).
 
 ### Embedding forms
 

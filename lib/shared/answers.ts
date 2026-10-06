@@ -6,10 +6,17 @@ import { isObject } from "./object.ts";
 export type Answers = Record<string, unknown>;
 
 /** SurveyJS's default `commentSuffix`: "Other" texts and comment areas. */
-const COMMENT_SUFFIX = "-Comment";
+export const COMMENT_SUFFIX = "-Comment";
 
 /** Elements that show something but take no answer. */
 const WITHOUT_ANSWER = new Set(["html", "image"]);
+
+/** A question of a form version, and the key its answer is stored under. */
+export type AnsweredQuestion = {
+  key: string;
+  /** The question's SurveyJS JSON. */
+  element: Record<string, unknown>;
+};
 
 /**
  * The answers to questions of `schema` (a form version's SurveyJS JSON).
@@ -17,15 +24,23 @@ const WITHOUT_ANSWER = new Set(["html", "image"]);
  * does not ask for reaches the notification email.
  */
 export function pickAnswers(schema: unknown, answers: Answers): Answers {
-  const keys = answerKeys(schema);
+  const keys = new Set<string>();
+  for (const { key } of questionsOf(schema)) {
+    keys.add(key);
+    keys.add(key + COMMENT_SUFFIX);
+  }
   return Object.fromEntries(
     Object.entries(answers).filter(([key]) => keys.has(key)),
   );
 }
 
-/** Every key a submission of `schema` may carry. */
-function answerKeys(schema: unknown): Set<string> {
-  const keys = new Set<string>();
+/**
+ * The questions of `schema` that take an answer, in display order (pages,
+ * then panels inside them), once per answer key: questions sharing a
+ * `valueName` share one answer.
+ */
+export function questionsOf(schema: unknown): AnsweredQuestion[] {
+  const questions = new Map<string, AnsweredQuestion>();
   const visit = (elements: unknown): void => {
     if (!Array.isArray(elements)) return;
     for (const element of elements) {
@@ -39,24 +54,24 @@ function answerKeys(schema: unknown): Set<string> {
         continue;
       // Questions store their answer under `valueName` when one is set. A
       // dynamic panel's inner questions live inside its own value.
-      const key = stringOr(element.valueName) ?? stringOr(element.name);
-      if (key === undefined) continue;
-      keys.add(key);
-      keys.add(key + COMMENT_SUFFIX);
+      const key = nonEmpty(element.valueName) ?? nonEmpty(element.name);
+      if (key !== undefined && !questions.has(key)) {
+        questions.set(key, { key, element });
+      }
     }
   };
 
   if (isObject(schema)) {
-    visit(schema.elements);
     if (Array.isArray(schema.pages)) {
       for (const page of schema.pages) {
         if (isObject(page)) visit(page.elements);
       }
     }
+    visit(schema.elements);
   }
-  return keys;
+  return [...questions.values()];
 }
 
-function stringOr(value: unknown): string | undefined {
+export function nonEmpty(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined;
 }

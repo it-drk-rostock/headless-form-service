@@ -441,7 +441,7 @@ begin
   end;
 
   -- 32. The anon role has no privilege on any table, view or sequence of
-  -- ours, and cannot call what /load-form calls (ADR-0004).
+  -- ours, and cannot call what /load-form and /dispatch-email call (ADR-0004).
   select string_agg(n.nspname || '.' || c.relname, ', ') into exposed
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
@@ -464,6 +464,14 @@ begin
   end if;
   if has_function_privilege('anon', 'public.count_form_load(uuid)', 'execute') then
     raise exception 'RLS check 32 failed: anon can call count_form_load';
+  end if;
+  -- /dispatch-email's functions run as their owner, so a stray grant would
+  -- let anyone read a form's recipients or mark a submission sent.
+  if has_function_privilege('anon', 'public.dispatch_submission(uuid, uuid, integer)', 'execute') then
+    raise exception 'RLS check 32 failed: anon can call dispatch_submission';
+  end if;
+  if has_function_privilege('anon', 'public.mark_submission_sent(uuid)', 'execute') then
+    raise exception 'RLS check 32 failed: anon can call mark_submission_sent';
   end if;
 end $$;
 

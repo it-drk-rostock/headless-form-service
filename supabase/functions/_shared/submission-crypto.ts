@@ -2,6 +2,9 @@
 // message bodies until delivery and in its dead-letter queue, so it only ever
 // sees ciphertext. Only the edge functions hold the keys. AES-256-GCM through
 // Web Crypto, so the module runs under Deno and under Vitest alike.
+import type { Answers } from "../../../lib/shared/answers.ts";
+import { isObject } from "../../../lib/shared/object.ts";
+import { isUuid } from "../../../lib/shared/uuid.ts";
 
 /** What a queued submission is bound to; a ciphertext moved elsewhere fails. */
 export type SubmissionIds = {
@@ -33,9 +36,47 @@ export type QueuedSubmission = {
   encrypted: EncryptedSubmission;
 };
 
+/**
+ * A QStash message body as `/submit-form` publishes it, split into the IDs
+ * the ciphertext is bound to and the ciphertext; null for anything else.
+ */
+export function parseQueuedSubmission(
+  text: string,
+): { ids: SubmissionIds; encrypted: EncryptedSubmission } | null {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isObject(body)) return null;
+
+  const { submission_id, form_id, version, encrypted } = body;
+  if (
+    typeof submission_id !== "string" ||
+    !isUuid(submission_id) ||
+    typeof form_id !== "string" ||
+    !isUuid(form_id) ||
+    typeof version !== "number" ||
+    !Number.isSafeInteger(version) ||
+    version < 1 ||
+    !isObject(encrypted) ||
+    encrypted.v !== 1 ||
+    typeof encrypted.kid !== "string" ||
+    typeof encrypted.iv !== "string" ||
+    typeof encrypted.ct !== "string"
+  ) {
+    return null;
+  }
+  return {
+    ids: { submissionId: submission_id, formId: form_id, version },
+    encrypted: { v: 1, kid: encrypted.kid, iv: encrypted.iv, ct: encrypted.ct },
+  };
+}
+
 /** What `encrypted` holds once decrypted. */
 export type SubmissionPayload = {
-  answers: Record<string, unknown>;
+  answers: Answers;
   /** The claimed form pass of a protected form (ticket 27). */
   pass_id: string | null;
 };
