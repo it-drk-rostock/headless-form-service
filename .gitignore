@@ -48,3 +48,6 @@ next-env.d.ts
 .wrangler
 .dev.vars*
 !.dev.vars.example
+
+# embed.js, built from embed/ by `npm run build:embed`
+/public/embed.js

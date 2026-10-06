@@ -2,3 +2,7 @@
 # https://opennext.js.org/cloudflare/caching#static-assets-caching
 /_next/static/*
   Cache-Control: public,max-age=31536000,immutable
+
+# TYPO3 pages load it from here, so a new build reaches them within minutes.
+/embed.js
+  Cache-Control: public,max-age=300

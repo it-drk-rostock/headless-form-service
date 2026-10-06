@@ -2,10 +2,16 @@
   "name": "headless-form-service",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
+    "prebuild": "npm run build:embed",
     "build": "next build",
+    "predev": "npm run build:embed",
     "dev": "next dev",
     "start": "next start",
+    "build:embed": "node embed/build.mts",
     "lint": "biome check",
     "format": "biome format --write",
     "test": "vitest run",

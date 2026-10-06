@@ -19,7 +19,7 @@ npx supabase link --project-ref qhjysorczroizpgmagpp
 
 Each function is a thin `index.ts` that only calls `Deno.serve` and wires real dependencies into a portable `handler.ts`. The handler takes a `Request` plus injected dependencies and returns a `Response`, using Web-standard APIs only, so Vitest tests it in Node with in-memory fakes. See `supabase/functions/ping/` for the pattern.
 
-`npm test` runs every `*.test.ts` under `app/`, `lib/`, `supabase/functions/` and `supabase/tests/`. `npm run typecheck` covers everything except the Deno entry points.
+`npm test` runs every `*.test.ts` under `app/`, `embed/`, `lib/`, `supabase/functions/` and `supabase/tests/`. `npm run typecheck` covers everything except the Deno entry points.
 
 ## Dashboard
 
@@ -150,6 +150,31 @@ The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supab
 - An unknown, never published or archived form gets 404. A protected form gets 403 without its questions, until form passes are checked (ticket 26).
 - Every served load adds one to `public.form_load_counts` for the form and the day (Europe/Berlin).
 - Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)` and read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
+
+### Embedding forms
+
+Editors paste this into a TYPO3 HTML content element (blueprint §6):
+
+```html
+<div data-form="<form-uuid>"></div>
+<script src="https://<dashboard-domain>/embed.js" defer></script>
+```
+
+`embed.js` shows the current version of each `data-form` element's form on the page. It is built from `embed/` (`main.ts` is the entry point) into `public/embed.js`, a single classic script that bundles the SurveyJS form library (with React), its default theme and German texts. `npm run build:embed` builds it, and `npm run dev` and `npm run build` (so also `preview` and `deploy`) run that first. It needs `NEXT_PUBLIC_SUPABASE_URL` at build time, from the environment or `.env.local`, and Node 22.18 or later; the `/load-form` address is compiled in. The built file is not committed. Browsers cache it for 5 minutes (`public/_headers`), so a deploy reaches TYPO3 pages without any change there.
+
+- Several forms on one page each load and fail on their own. Pasting the whole snippet once per form is fine: every form is still shown once. Only elements on the page when it has loaded are filled in, not ones added later by scripts.
+- Instead of an empty box, visitors see a German message: while loading, for a form that does not exist or is not published (or an empty `data-form`), and when loading fails, which includes pages whose origin is not allowed and no answer within 15 seconds.
+- Submitting is not wired up yet (ticket 12). *Abschließen* keeps the form open and shows a notice that it cannot be sent yet.
+- The form uses SurveyJS's default theme inside the TYPO3 page. Page CSS for bare `input` or `button` elements can still reach into it.
+
+For TYPO3 admins:
+
+1. Add the site's origin to the allowed origins (see *Loading forms* above), e.g. `https://www.drk-rostock.de`. Without it, the form shows the loading error.
+2. If the site sends a Content-Security-Policy, it must allow:
+   - `script-src https://<dashboard-domain>`, for `embed.js`;
+   - `connect-src https://qhjysorczroizpgmagpp.supabase.co`, for `/load-form` (and later `/submit-form`).
+
+   Nothing else: the theme is added as a constructed stylesheet, so `style-src` needs no `'unsafe-inline'`, and the form loads no fonts or images. Browsers without constructed stylesheets (before Safari 16.4) fall back to a `<style>` element, which a `style-src` without `'unsafe-inline'` blocks; the form then shows unstyled. Turnstile (ticket 15) will add `https://challenges.cloudflare.com` to `script-src` and `frame-src`.
 
 ### Deploy to Cloudflare
 
