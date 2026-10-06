@@ -70,3 +70,27 @@ Open points for the reviewer:
 - **One bucket for requests without an address.** If the header were ever missing, all such visitors would share one limit.
 - **The limit can't be turned off.** It has to be at least 1. A very high number has the same effect.
 - **No GLOSSARY entry** for "rate limit". It's a technical term, not domain language.
+
+**2026-10-06, agent (follow-up, at the owner's request):** two decisions above changed. Where this comment and the one above disagree, this one wins.
+
+- **The limit always applies (fail closed).**
+  - If Redis fails, or doesn't answer within 2 s, both functions refuse the request with 503 `rate_limit_unavailable`, and the embed shows its general error.
+  - The SDK's timeout would let the request through (`reason: "timeout"`). `redis.ts` turns that into a failure, so it is refused too.
+  - A Redis outage therefore takes the forms down. That is intended.
+- **Submissions: 3 per hour and IP.**
+  - `submit_rate_limit` now defaults to 3, and its window is 1 hour. Loads stay at 60 per minute. The ticket's "10/min" is superseded.
+  - The windows are fixed in the handlers (`RATE_LIMIT_WINDOW`); only the numbers live in `settings`. The migration was changed in place, since it hasn't been pushed yet.
+  - Every request to `/submit-form` counts, including a retry of the same submission after a 503 or a network error.
+- **Embed on submit:** "Zu viele Einsendungen. Bitte versuchen Sie es später erneut."
+- **Docs:** blueprint §3 and §4.1, and the README, are updated.
+- **Checks:** `npm test` passes, 406 tests (the fail-open tests became fail-closed ones). Typecheck and Biome on the changed files pass.
+
+The steps for the human above still apply, with these changes:
+
+- After step 1, `select load_rate_limit, submit_rate_limit from settings;` should give 60 and **3**.
+- **Additional check:** with a published form, send `/submit-form` four times from the same IP, each time with a fresh `submission_id`. Expect 202 three times, then 429. It stays 429 for an hour, unless you raise `submit_rate_limit` meanwhile.
+
+Open points for the reviewer:
+
+- **Shared IPs.** Visitors behind one IP (an office network, mobile carrier NAT) share the 3 per hour. If, say, several colleagues in one DRK office use the same form, the fourth is refused.
+- **Retries count.** A visitor whose sending fails twice has one attempt left that hour. If that's too strict, only accepted submissions could be counted. That would mean checking the limit after queueing, a larger change.

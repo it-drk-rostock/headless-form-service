@@ -22,7 +22,7 @@ export const submitMessages = {
     "Dieses Formular nimmt keine Einsendungen mehr an. Bitte laden Sie die Seite neu.",
   pass_invalid: messages.pass_invalid,
   rate_limited:
-    "Zu viele Versuche. Bitte warten Sie einen Moment und versuchen Sie es dann erneut.",
+    "Zu viele Einsendungen. Bitte versuchen Sie es später erneut.",
   failed:
     "Ihre Angaben konnten nicht gesendet werden. Bitte versuchen Sie es in einem Moment erneut.",
 } satisfies Record<SubmitFailure | "sending", string>;

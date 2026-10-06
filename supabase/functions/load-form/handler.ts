@@ -29,18 +29,21 @@ export type LoadFormDeps = {
 
 const METHODS = ["GET"];
 
+/** Loads per minute and IP (blueprint §4.1). */
+const RATE_LIMIT_WINDOW = "1 m";
+
 export async function handleLoadForm(
   request: Request,
   deps: LoadFormDeps,
 ): Promise<Response> {
   let origin: string | null = null;
   try {
-    const admitted = await admitPublicRequest(
-      request,
-      await deps.settings(),
-      deps.withinRateLimit,
-      METHODS,
-    );
+    const admitted = await admitPublicRequest(request, {
+      settings: await deps.settings(),
+      window: RATE_LIMIT_WINDOW,
+      withinRateLimit: deps.withinRateLimit,
+      methods: METHODS,
+    });
     if ("response" in admitted) return admitted.response;
     origin = admitted.origin;
 

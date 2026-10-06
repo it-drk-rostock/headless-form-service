@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import type { RateLimit } from "../_shared/rate-limit.ts";
 import {
   decryptSubmission,
   encryptSubmission,
@@ -50,10 +51,10 @@ function fakes(
   const hits = new Map<string, number>();
   const deps: SubmitFormDeps = {
     settings: async () => ({ allowedOrigins: [ORIGIN], rateLimit: 10 }),
-    withinRateLimit: async (ip, perMinute) => {
+    withinRateLimit: async (ip, { requests }) => {
       const count = (hits.get(ip) ?? 0) + 1;
       hits.set(ip, count);
-      return count <= perMinute;
+      return count <= requests;
     },
     loadVersion: async (formId, version) =>
       versions[`${formId}/${version}`] ?? null,
@@ -317,14 +318,14 @@ describe("handleSubmitForm", () => {
     expect(published).toHaveLength(1);
   });
 
-  it("limits each IP on its own, by the submit limit from the settings", async () => {
+  it("limits each IP on its own, by the submit limit per hour from the settings", async () => {
     const { deps } = fakes();
-    const limits: number[] = [];
+    const limits: RateLimit[] = [];
     deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 1 });
     const count = deps.withinRateLimit;
-    deps.withinRateLimit = (ip, perMinute) => {
-      limits.push(perMinute);
-      return count(ip, perMinute);
+    deps.withinRateLimit = (ip, limit) => {
+      limits.push(limit);
+      return count(ip, limit);
     };
 
     await handleSubmitForm(post(body(), { ip: "203.0.113.7" }), deps);
@@ -334,7 +335,10 @@ describe("handleSubmitForm", () => {
     );
 
     expect(other.status).toBe(202);
-    expect(limits).toEqual([1, 1]);
+    expect(limits).toEqual([
+      { requests: 1, window: "1 h" },
+      { requests: 1, window: "1 h" },
+    ]);
   });
 
   it("does not count other origins or preflights against the limit", async () => {
@@ -349,13 +353,19 @@ describe("handleSubmitForm", () => {
     expect(hits.size).toBe(0);
   });
 
-  it("still accepts submissions when the rate limiter fails", async () => {
-    const { deps } = fakes();
+  it("answers 503 when the rate limiter fails, without queueing", async () => {
+    const { deps, stats, published } = fakes();
     deps.withinRateLimit = async () => {
       throw new Error("redis down");
     };
 
-    expect((await handleSubmitForm(post(body()), deps)).status).toBe(202);
+    const response = await handleSubmitForm(post(body()), deps);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "rate_limit_unavailable" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
   });
 
   it("answers the preflight of an allowed origin", async () => {

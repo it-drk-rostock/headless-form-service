@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientIp, rateLimited } from "./rate-limit.ts";
+import { clientIp, type RateLimit, rateLimited } from "./rate-limit.ts";
 
 const request = (forwardedFor?: string) =>
   new Request("https://example.test/fn", {
@@ -21,26 +21,26 @@ describe("clientIp", () => {
 
 describe("rateLimited", () => {
   it("lets a request within the limit through, counting it under its IP", async () => {
-    const calls: [string, number][] = [];
+    const calls: [string, RateLimit][] = [];
 
     const response = await rateLimited(
       request("203.0.113.7"),
-      async (ip, perMinute) => {
-        calls.push([ip, perMinute]);
+      async (ip, limit) => {
+        calls.push([ip, limit]);
         return true;
       },
-      10,
+      { requests: 3, window: "1 h" },
     );
 
     expect(response).toBeNull();
-    expect(calls).toEqual([["203.0.113.7", 10]]);
+    expect(calls).toEqual([["203.0.113.7", { requests: 3, window: "1 h" }]]);
   });
 
   it("answers 429 once the limit is reached", async () => {
     const response = await rateLimited(
       request("203.0.113.7"),
       async () => false,
-      10,
+      { requests: 3, window: "1 h" },
     );
 
     expect(response?.status).toBe(429);
@@ -48,15 +48,16 @@ describe("rateLimited", () => {
     expect(response?.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("lets requests through when the limiter fails, so Redis can't take the forms down", async () => {
+  it("refuses requests when the limiter fails, so nobody gets around it", async () => {
     const response = await rateLimited(
       request("203.0.113.7"),
       async () => {
         throw new Error("redis down");
       },
-      10,
+      { requests: 3, window: "1 h" },
     );
 
-    expect(response).toBeNull();
+    expect(response?.status).toBe(503);
+    expect(await response?.json()).toEqual({ error: "rate_limit_unavailable" });
   });
 });

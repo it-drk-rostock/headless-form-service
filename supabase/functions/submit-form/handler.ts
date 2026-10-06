@@ -59,6 +59,9 @@ export type SubmitFormDeps = {
 
 const METHODS = ["POST"];
 
+/** Submissions per hour and IP (blueprint §4.2). */
+const RATE_LIMIT_WINDOW = "1 h";
+
 /** QStash retries after the first attempt, with exponential backoff (§4.3). */
 const RETRIES = 3;
 
@@ -68,12 +71,12 @@ export async function handleSubmitForm(
 ): Promise<Response> {
   let origin: string | null = null;
   try {
-    const admitted = await admitPublicRequest(
-      request,
-      await deps.settings(),
-      deps.withinRateLimit,
-      METHODS,
-    );
+    const admitted = await admitPublicRequest(request, {
+      settings: await deps.settings(),
+      window: RATE_LIMIT_WINDOW,
+      withinRateLimit: deps.withinRateLimit,
+      methods: METHODS,
+    });
     if ("response" in admitted) return admitted.response;
     origin = admitted.origin;
 

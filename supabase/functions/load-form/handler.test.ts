@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { RateLimit } from "../_shared/rate-limit.ts";
 import {
   handleLoadForm,
   type LoadedForm,
@@ -24,10 +25,10 @@ function fakes(
   const hits = new Map<string, number>();
   const deps: LoadFormDeps = {
     settings: async () => ({ allowedOrigins: [ORIGIN], rateLimit: 60 }),
-    withinRateLimit: async (ip, perMinute) => {
+    withinRateLimit: async (ip, { requests }) => {
       const count = (hits.get(ip) ?? 0) + 1;
       hits.set(ip, count);
-      return count <= perMinute;
+      return count <= requests;
     },
     loadForm: async (id) => forms[id] ?? null,
     countLoad: async (id) => {
@@ -135,14 +136,14 @@ describe("handleLoadForm", () => {
     expect(counted).toEqual([FORM, FORM]);
   });
 
-  it("limits each IP on its own, by the load limit from the settings", async () => {
+  it("limits each IP on its own, by the load limit per minute from the settings", async () => {
     const { deps } = fakes();
-    const limits: number[] = [];
+    const limits: RateLimit[] = [];
     deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 1 });
     const count = deps.withinRateLimit;
-    deps.withinRateLimit = (ip, perMinute) => {
-      limits.push(perMinute);
-      return count(ip, perMinute);
+    deps.withinRateLimit = (ip, limit) => {
+      limits.push(limit);
+      return count(ip, limit);
     };
 
     await handleLoadForm(get(`?form_id=${FORM}`, { ip: "203.0.113.7" }), deps);
@@ -152,7 +153,10 @@ describe("handleLoadForm", () => {
     );
 
     expect(other.status).toBe(200);
-    expect(limits).toEqual([1, 1]);
+    expect(limits).toEqual([
+      { requests: 1, window: "1 m" },
+      { requests: 1, window: "1 m" },
+    ]);
   });
 
   it("does not count other origins or preflights against the limit", async () => {
@@ -167,15 +171,18 @@ describe("handleLoadForm", () => {
     expect(hits.size).toBe(0);
   });
 
-  it("still serves the form when the rate limiter fails", async () => {
-    const { deps } = fakes();
+  it("answers 503 when the rate limiter fails, without loading or counting", async () => {
+    const { deps, counted } = fakes();
     deps.withinRateLimit = async () => {
       throw new Error("redis down");
     };
 
     const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "rate_limit_unavailable" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(counted).toEqual([]);
   });
 
   it("answers the preflight of an allowed origin", async () => {

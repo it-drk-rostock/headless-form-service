@@ -1,25 +1,28 @@
 // Rate limiting for the public edge functions (blueprint §4.1, §4.2): each
-// IP gets a number of requests per minute, from the `settings` row. The
-// limiter itself (Redis) is injected; this part stays web-standard, like the
-// handlers.
+// IP gets a number of requests per window, the number from the `settings`
+// row. The limiter itself (Redis) is injected; this part stays web-standard,
+// like the handlers.
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { handleCors, withCorsHeaders } from "./cors.ts";
 
 /**
  * What a public edge function reads of the `settings` row on every request,
  * so changes apply at once: the allowed origins and its own limit (requests
- * per minute and IP).
+ * per window and IP).
  */
 export type PublicEndpointSettings = {
   allowedOrigins: string[];
   rateLimit: number;
 };
 
+/** At most `requests` per IP within the last `window` (sliding window). */
+export type RateLimit = { requests: number; window: "1 m" | "1 h" };
+
 /**
- * Counts one request from `ip`. False once that IP made more than
- * `perMinute` requests in the last minute (sliding window).
+ * Counts one request from `ip`. False once that IP is over `limit`. Throws
+ * when it cannot tell, also when Redis is too slow to answer.
  */
-export type RateLimiter = (ip: string, perMinute: number) => Promise<boolean>;
+export type RateLimiter = (ip: string, limit: RateLimit) => Promise<boolean>;
 
 /**
  * The CORS check, then the rate limit (blueprint §4.1, §4.2). Lets the
@@ -28,18 +31,21 @@ export type RateLimiter = (ip: string, perMinute: number) => Promise<boolean>;
  */
 export async function admitPublicRequest(
   request: Request,
-  settings: PublicEndpointSettings,
-  withinRateLimit: RateLimiter,
-  methods: readonly string[],
+  endpoint: {
+    settings: PublicEndpointSettings;
+    window: RateLimit["window"];
+    withinRateLimit: RateLimiter;
+    methods: readonly string[];
+  },
 ): Promise<{ origin: string } | { response: Response }> {
+  const { settings, window, withinRateLimit, methods } = endpoint;
   const cors = handleCors(request, settings.allowedOrigins, methods);
   if ("response" in cors) return cors;
 
-  const limited = await rateLimited(
-    request,
-    withinRateLimit,
-    settings.rateLimit,
-  );
+  const limited = await rateLimited(request, withinRateLimit, {
+    requests: settings.rateLimit,
+    window,
+  });
   return limited === null
     ? cors
     : { response: withCorsHeaders(limited, cors.origin) };
@@ -55,20 +61,21 @@ export function clientIp(request: Request): string {
 }
 
 /**
- * 429 when the request's IP is over `perMinute`, otherwise null. A failing
- * limiter lets the request through: Redis being down must not keep forms
- * from visitors.
+ * 429 when the request's IP is over `limit`, otherwise null. A failing
+ * limiter refuses the request with 503: the limit always applies, so an
+ * outage cannot be used to flood the forms.
  */
 export async function rateLimited(
   request: Request,
   withinRateLimit: RateLimiter,
-  perMinute: number,
+  limit: RateLimit,
 ): Promise<Response | null> {
+  let within: boolean;
   try {
-    if (await withinRateLimit(clientIp(request), perMinute)) return null;
+    within = await withinRateLimit(clientIp(request), limit);
   } catch (error) {
-    console.error("rate limiting failed, letting the request through", error);
-    return null;
+    console.error("rate limiting failed, refusing the request", error);
+    return reply({ error: "rate_limit_unavailable" }, 503);
   }
-  return reply({ error: "rate_limited" }, 429);
+  return within ? null : reply({ error: "rate_limited" }, 429);
 }

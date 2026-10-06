@@ -164,14 +164,14 @@ describe("settings", () => {
     ).toEqual([{ allowed_origins: ["http://localhost:3000"] }]);
   });
 
-  it("starts with 60 loads and 10 submissions per minute and IP", async () => {
+  it("starts with 60 loads per minute and 3 submissions per hour and IP", async () => {
     expect(
       await commitAs(
         db,
         "service",
         "select load_rate_limit, submit_rate_limit from public.settings",
       ),
-    ).toEqual([{ load_rate_limit: 60, submit_rate_limit: 10 }]);
+    ).toEqual([{ load_rate_limit: 60, submit_rate_limit: 3 }]);
   });
 
   it.each([

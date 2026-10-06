@@ -23,21 +23,26 @@ export function createRateLimiter(name: string): RateLimiter {
   // The limit comes from the settings row on every request, so there is one
   // limiter per value seen. They share the keys: the window's counts stay
   // when the limit changes.
-  const limiters = new Map<number, Ratelimit>();
-  return async (ip, perMinute) => {
-    let limiter = limiters.get(perMinute);
+  const limiters = new Map<string, Ratelimit>();
+  return async (ip, { requests, window }) => {
+    const key = `${requests}/${window}`;
+    let limiter = limiters.get(key);
     if (limiter === undefined) {
       limiter = new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(perMinute, "1 m"),
+        limiter: Ratelimit.slidingWindow(requests, window),
         prefix: `ratelimit:${name}`,
-        // The visitor waits on this. When Redis is slower, the request is let
-        // through, as when it fails (`rateLimited`).
-        timeout: 1000,
+        // The visitor waits on this.
+        timeout: 2000,
       });
-      limiters.set(perMinute, limiter);
+      limiters.set(key, limiter);
     }
-    const { success } = await limiter.limit(ip);
+    const { success, reason } = await limiter.limit(ip);
+    // On a timeout the SDK lets the request through; the limit must always
+    // apply, so it is refused like any other failure (`rateLimited`).
+    if (reason === "timeout") {
+      throw new Error(`${name}: Redis did not answer the rate limit in time`);
+    }
     return success;
   };
 }

@@ -156,7 +156,7 @@ The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supab
 
 The embed sends a completed form with `POST /functions/v1/submit-form` (`supabase/functions/submit-form/`), as JSON `{ form_id, version, submission_id, answers }` (blueprint §4.2). The embed makes one `submission_id` per form load and sends it again on every retry.
 
-- The same allowed origins as `/load-form`. More than `settings.submit_rate_limit` requests per minute from one IP get 429 `rate_limited`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
+- The same allowed origins as `/load-form`. More than `settings.submit_rate_limit` requests per hour from one IP get 429 `rate_limited`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
 - Answers to keys that are not questions of that version are dropped (`lib/shared/answers.ts`).
 - The function writes a `queued` row to `public.form_stats` under the submission ID. The answers are stored nowhere. It encrypts `{ answers, pass_id }` with AES-256-GCM and publishes only the IDs and the ciphertext to QStash, with the submission ID as deduplication ID and 3 retries (ADR-0001). The ciphertext is bound to the submission, form and version, so it cannot be moved to another message.
 - If publishing fails, the row is removed and the answer is 503 `queue_unavailable`; the visitor can send again with the same ID. A submission ID whose message QStash has confirmed gets 202 without publishing again. One whose publish was never confirmed (say, the row could not be removed) is published again, and QStash's deduplication keeps that to one message.
@@ -177,12 +177,13 @@ npx supabase secrets set SUBMISSION_ENCRYPTION_KEYS=k1:<output of: openssl rand 
 
 ### Rate limiting
 
-`/load-form` and `/submit-form` limit each IP with a sliding window of one minute in Upstash Redis (EU, ADR-0002), right after the origin check (blueprint §4.1, §4.2). Redis is used for nothing else.
+`/load-form` and `/submit-form` limit each IP with a sliding window in Upstash Redis (EU, ADR-0002), right after the origin check (blueprint §4.1, §4.2). Redis is used for nothing else.
 
-- The limits are `public.settings.load_rate_limit` (default 60) and `submit_rate_limit` (default 10), per minute and IP, read on every request. Until the settings page exists (ticket 20), change them in the SQL editor: `update public.settings set submit_rate_limit = 20;`.
-- Over the limit, the answer is 429 `rate_limited`, with CORS headers. The embed then shows *Zu viele Versuche …*; a submission stays in the form and can be sent again with the same ID.
+- The limits are `public.settings.load_rate_limit` (default 60 per minute and IP) and `submit_rate_limit` (default 3 per hour and IP), read on every request. The windows are fixed in the handlers. Until the settings page exists (ticket 20), change the numbers in the SQL editor: `update public.settings set submit_rate_limit = 5;`.
+- Every request to `/submit-form` counts, also a retry of the same submission after an error.
+- Over the limit, the answer is 429 `rate_limited`, with CORS headers. The embed then shows *Zu viele Versuche …* when loading and *Zu viele Einsendungen …* when sending; the form stays open.
 - The IP is the first address in `x-forwarded-for`, which Supabase's edge sets. Loads and submissions count separately (key prefixes `ratelimit:load-form` and `ratelimit:submit-form`). Preflights and refused origins don't count.
-- If Redis fails or takes longer than a second, the request is let through: a Redis outage must not take the forms down.
+- The limit always applies. If Redis fails or does not answer within 2 seconds, the request is refused with 503 `rate_limit_unavailable`, and the embed shows its general error. A Redis outage therefore takes the forms down.
 
 Both functions need the Redis database's REST credentials, from the Upstash console (EU region):
 
