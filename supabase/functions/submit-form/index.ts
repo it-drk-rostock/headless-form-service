@@ -1,10 +1,11 @@
 // Thin Deno entry point: wire real dependencies into the portable handler.
 // All logic lives in handler.ts, which is tested under Vitest with fakes.
 import { Client } from "npm:@upstash/qstash@2.12.0";
+import { createRateLimiter } from "../_shared/redis.ts";
 import {
   createServiceClient,
   dispatchEmailUrl,
-  readAllowedOrigins,
+  readEndpointSettings,
 } from "../_shared/service.ts";
 import {
   encryptSubmission,
@@ -13,6 +14,7 @@ import {
 import { handleSubmitForm, type SubmittedForm } from "./handler.ts";
 
 const supabase = createServiceClient("submit-form");
+const withinRateLimit = createRateLimiter("submit-form");
 
 // Set with `supabase secrets set` (README, "Submitting forms"). QStash's
 // default URL is its EU region (ADR-0002).
@@ -36,7 +38,8 @@ const dispatchUrl = dispatchEmailUrl();
 
 Deno.serve((request) =>
   handleSubmitForm(request, {
-    allowedOrigins: () => readAllowedOrigins(supabase),
+    settings: () => readEndpointSettings(supabase, "submit"),
+    withinRateLimit,
     loadVersion: async (formId, version) => {
       const { data, error } = await supabase
         .rpc("submission_form", { form: formId, version })

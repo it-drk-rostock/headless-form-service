@@ -34,6 +34,7 @@
   "exclude": [
     "node_modules",
     "supabase/functions/**/index.ts",
-    "supabase/functions/_shared/service.ts"
+    "supabase/functions/_shared/service.ts",
+    "supabase/functions/_shared/redis.ts"
   ]
 }

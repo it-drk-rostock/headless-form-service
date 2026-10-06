@@ -2,7 +2,11 @@
 // every answer into something the embed can show. Web-standard APIs only, so
 // Vitest tests it in Node with a fake `fetch`.
 
-export type LoadFailure = "not_found" | "pass_invalid" | "failed";
+export type LoadFailure =
+  | "not_found"
+  | "pass_invalid"
+  | "rate_limited"
+  | "failed";
 
 export type LoadResult =
   | { kind: "ready"; version: number; schema: object }
@@ -26,6 +30,7 @@ export async function loadForm(
       `${endpoint}?${new URLSearchParams({ form_id: formId })}`,
     );
     if (response.status === 404) return failure("not_found");
+    if (response.status === 429) return failure("rate_limited");
 
     const body: unknown = await response.json();
     if (response.status === 403 && errorCode(body) === "form_pass_invalid") {

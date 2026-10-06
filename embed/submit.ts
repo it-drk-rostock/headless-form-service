@@ -2,7 +2,11 @@
 // answer into something the embed can show. Web-standard APIs only, so
 // Vitest tests it in Node with a fake `fetch`.
 
-export type SubmitFailure = "not_found" | "pass_invalid" | "failed";
+export type SubmitFailure =
+  | "not_found"
+  | "pass_invalid"
+  | "rate_limited"
+  | "failed";
 
 export type SubmitResult =
   | { kind: "accepted" }
@@ -40,6 +44,7 @@ export async function submitForm(
     // Accepted means sent, to the visitor (GLOSSARY).
     if (response.status === 202) return { kind: "accepted" };
     if (response.status === 404) return failure("not_found");
+    if (response.status === 429) return failure("rate_limited");
     if (
       response.status === 403 &&
       (await errorCode(response)) === "form_pass_invalid"

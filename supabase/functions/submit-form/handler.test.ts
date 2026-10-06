@@ -35,8 +35,9 @@ beforeAll(async () => {
 });
 
 /**
- * In-memory fakes: version 2 of one public form, the `form_stats` rows, and
- * the messages QStash accepted.
+ * In-memory fakes: version 2 of one public form, the `form_stats` rows, the
+ * messages QStash accepted, and a rate limiter that counts requests per IP
+ * without ever forgetting them.
  */
 function fakes(
   versions: Record<string, SubmittedForm> = {
@@ -46,8 +47,14 @@ function fakes(
   const stats = new Map<string, { formId: string; version: number }>();
   const messageIds = new Map<string, string>();
   const published: PublishRequest[] = [];
+  const hits = new Map<string, number>();
   const deps: SubmitFormDeps = {
-    allowedOrigins: async () => [ORIGIN],
+    settings: async () => ({ allowedOrigins: [ORIGIN], rateLimit: 10 }),
+    withinRateLimit: async (ip, perMinute) => {
+      const count = (hits.get(ip) ?? 0) + 1;
+      hits.set(ip, count);
+      return count <= perMinute;
+    },
     loadVersion: async (formId, version) =>
       versions[`${formId}/${version}`] ?? null,
     // Like `queue_submission`: false only once QStash's message ID is kept.
@@ -68,7 +75,7 @@ function fakes(
       return { messageId: `msg_${published.length}` };
     },
   };
-  return { deps, stats, messageIds, published };
+  return { deps, stats, messageIds, published, hits };
 }
 
 const body = (overrides: Record<string, unknown> = {}) => ({
@@ -81,12 +88,13 @@ const body = (overrides: Record<string, unknown> = {}) => ({
 
 const post = (
   payload: unknown,
-  init: RequestInit & { origin?: string | null } = {},
+  init: RequestInit & { origin?: string | null; ip?: string } = {},
 ) => {
   const headers = new Headers(init.headers);
   const origin = init.origin === undefined ? ORIGIN : init.origin;
   if (origin) headers.set("origin", origin);
   headers.set("content-type", "application/json");
+  headers.set("x-forwarded-for", init.ip ?? "203.0.113.7");
   return new Request("https://example.test/submit-form", {
     method: "POST",
     body: typeof payload === "string" ? payload : JSON.stringify(payload),
@@ -290,6 +298,64 @@ describe("handleSubmitForm", () => {
     expect(await response.json()).toEqual({ error: "origin_not_allowed" });
     expect(stats.size).toBe(0);
     expect(published).toEqual([]);
+  });
+
+  it("answers 429 with CORS headers once an IP is over the submit limit, without queueing", async () => {
+    const { deps, stats, published } = fakes();
+    deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 1 });
+
+    await handleSubmitForm(post(body()), deps);
+    const response = await handleSubmitForm(
+      post(body({ submission_id: "7e1d2c3b-4a5f-4e6d-8c7b-9a0f1e2d3c4b" })),
+      deps,
+    );
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "rate_limited" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(stats.size).toBe(1);
+    expect(published).toHaveLength(1);
+  });
+
+  it("limits each IP on its own, by the submit limit from the settings", async () => {
+    const { deps } = fakes();
+    const limits: number[] = [];
+    deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 1 });
+    const count = deps.withinRateLimit;
+    deps.withinRateLimit = (ip, perMinute) => {
+      limits.push(perMinute);
+      return count(ip, perMinute);
+    };
+
+    await handleSubmitForm(post(body(), { ip: "203.0.113.7" }), deps);
+    const other = await handleSubmitForm(
+      post(body(), { ip: "198.51.100.4" }),
+      deps,
+    );
+
+    expect(other.status).toBe(202);
+    expect(limits).toEqual([1, 1]);
+  });
+
+  it("does not count other origins or preflights against the limit", async () => {
+    const { deps, hits } = fakes();
+
+    await handleSubmitForm(
+      post(body(), { origin: "https://evil.example" }),
+      deps,
+    );
+    await handleSubmitForm(post(body(), { method: "OPTIONS" }), deps);
+
+    expect(hits.size).toBe(0);
+  });
+
+  it("still accepts submissions when the rate limiter fails", async () => {
+    const { deps } = fakes();
+    deps.withinRateLimit = async () => {
+      throw new Error("redis down");
+    };
+
+    expect((await handleSubmitForm(post(body()), deps)).status).toBe(202);
   });
 
   it("answers the preflight of an allowed origin", async () => {

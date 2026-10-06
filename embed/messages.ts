@@ -9,6 +9,8 @@ export const messages = {
   loading: "Formular wird geladen …",
   not_found: "Dieses Formular ist nicht verfügbar.",
   pass_invalid: "Dieser Link ist ungültig oder abgelaufen.",
+  rate_limited:
+    "Zu viele Versuche. Bitte warten Sie einen Moment und laden Sie die Seite dann neu.",
   failed:
     "Das Formular konnte nicht geladen werden. Bitte versuchen Sie es später erneut.",
 } satisfies Record<LoadFailure | "loading", string>;
@@ -19,6 +21,8 @@ export const submitMessages = {
   not_found:
     "Dieses Formular nimmt keine Einsendungen mehr an. Bitte laden Sie die Seite neu.",
   pass_invalid: messages.pass_invalid,
+  rate_limited:
+    "Zu viele Versuche. Bitte warten Sie einen Moment und versuchen Sie es dann erneut.",
   failed:
     "Ihre Angaben konnten nicht gesendet werden. Bitte versuchen Sie es in einem Moment erneut.",
 } satisfies Record<SubmitFailure | "sending", string>;

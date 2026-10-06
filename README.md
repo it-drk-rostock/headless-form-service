@@ -147,6 +147,7 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).
 
 - Only pages on `public.settings.allowed_origins` may call it. Other origins, and requests without an `Origin` header, get 403 before the form is looked at. The list is read on every request. Until the settings page exists (ticket 20), change it in the SQL editor: `update public.settings set allowed_origins = array['http://localhost:3000', 'https://www.drk-rostock.de'];`. Origins must match exactly, as the browser sends them: scheme, host and any port, without a trailing slash.
+- More than `settings.load_rate_limit` requests per minute from one IP get 429 `rate_limited` (see *Rate limiting* below).
 - An unknown, never published or archived form gets 404. A protected form gets 403 without its questions, until form passes are checked (ticket 26).
 - Every served load adds one to `public.form_load_counts` for the form and the day (Europe/Berlin).
 - Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)` and read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
@@ -155,7 +156,7 @@ The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supab
 
 The embed sends a completed form with `POST /functions/v1/submit-form` (`supabase/functions/submit-form/`), as JSON `{ form_id, version, submission_id, answers }` (blueprint §4.2). The embed makes one `submission_id` per form load and sends it again on every retry.
 
-- The same allowed origins as `/load-form`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
+- The same allowed origins as `/load-form`. More than `settings.submit_rate_limit` requests per minute from one IP get 429 `rate_limited`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
 - Answers to keys that are not questions of that version are dropped (`lib/shared/answers.ts`).
 - The function writes a `queued` row to `public.form_stats` under the submission ID. The answers are stored nowhere. It encrypts `{ answers, pass_id }` with AES-256-GCM and publishes only the IDs and the ciphertext to QStash, with the submission ID as deduplication ID and 3 retries (ADR-0001). The ciphertext is bound to the submission, form and version, so it cannot be moved to another message.
 - If publishing fails, the row is removed and the answer is 503 `queue_unavailable`; the visitor can send again with the same ID. A submission ID whose message QStash has confirmed gets 202 without publishing again. One whose publish was never confirmed (say, the row could not be removed) is published again, and QStash's deduplication keeps that to one message.
@@ -173,6 +174,21 @@ npx supabase secrets set SUBMISSION_ENCRYPTION_KEYS=k1:<output of: openssl rand 
 ```
 
 `SUBMISSION_ENCRYPTION_KEYS` is a comma-separated list of `id:base64key`, each key 32 random bytes. The first key encrypts; all of them decrypt. To rotate, put a new key in front (`k2:<new>,k1:<old>`) and keep the old one for at least the 7 days QStash keeps dead-lettered messages (blueprint §4.5). Only the edge functions hold the keys. QStash's default URL is its EU region; `QSTASH_URL` overrides it, and must stay an EU one (ADR-0002).
+
+### Rate limiting
+
+`/load-form` and `/submit-form` limit each IP with a sliding window of one minute in Upstash Redis (EU, ADR-0002), right after the origin check (blueprint §4.1, §4.2). Redis is used for nothing else.
+
+- The limits are `public.settings.load_rate_limit` (default 60) and `submit_rate_limit` (default 10), per minute and IP, read on every request. Until the settings page exists (ticket 20), change them in the SQL editor: `update public.settings set submit_rate_limit = 20;`.
+- Over the limit, the answer is 429 `rate_limited`, with CORS headers. The embed then shows *Zu viele Versuche …*; a submission stays in the form and can be sent again with the same ID.
+- The IP is the first address in `x-forwarded-for`, which Supabase's edge sets. Loads and submissions count separately (key prefixes `ratelimit:load-form` and `ratelimit:submit-form`). Preflights and refused origins don't count.
+- If Redis fails or takes longer than a second, the request is let through: a Redis outage must not take the forms down.
+
+Both functions need the Redis database's REST credentials, from the Upstash console (EU region):
+
+```bash
+npx supabase secrets set UPSTASH_REDIS_REST_URL=<REST URL> UPSTASH_REDIS_REST_TOKEN=<REST token>
+```
 
 ### Delivering submissions
 

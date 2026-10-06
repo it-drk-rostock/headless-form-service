@@ -6,11 +6,12 @@ import { type Answers, pickAnswers } from "../../../lib/shared/answers.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isObject } from "../../../lib/shared/object.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
+import { allowedMethods, withCorsHeaders } from "../_shared/cors.ts";
 import {
-  allowedMethods,
-  handleCors,
-  withCorsHeaders,
-} from "../_shared/cors.ts";
+  admitPublicRequest,
+  type PublicEndpointSettings,
+  type RateLimiter,
+} from "../_shared/rate-limit.ts";
 import type {
   EncryptedSubmission,
   QueuedSubmission,
@@ -32,8 +33,9 @@ export type PublishRequest = {
 };
 
 export type SubmitFormDeps = {
-  /** The `settings` row's list, read per request so changes apply at once. */
-  allowedOrigins: () => Promise<string[]>;
+  /** With the submit limit as `rateLimit`. */
+  settings: () => Promise<PublicEndpointSettings>;
+  withinRateLimit: RateLimiter;
   /** Null for an unknown version, or a form unpublished or archived. */
   loadVersion: (
     formId: string,
@@ -66,9 +68,14 @@ export async function handleSubmitForm(
 ): Promise<Response> {
   let origin: string | null = null;
   try {
-    const cors = handleCors(request, await deps.allowedOrigins(), METHODS);
-    if ("response" in cors) return cors.response;
-    origin = cors.origin;
+    const admitted = await admitPublicRequest(
+      request,
+      await deps.settings(),
+      deps.withinRateLimit,
+      METHODS,
+    );
+    if ("response" in admitted) return admitted.response;
+    origin = admitted.origin;
 
     return withCorsHeaders(await submit(request, deps), origin);
   } catch (error) {

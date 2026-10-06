@@ -164,6 +164,26 @@ describe("settings", () => {
     ).toEqual([{ allowed_origins: ["http://localhost:3000"] }]);
   });
 
+  it("starts with 60 loads and 10 submissions per minute and IP", async () => {
+    expect(
+      await commitAs(
+        db,
+        "service",
+        "select load_rate_limit, submit_rate_limit from public.settings",
+      ),
+    ).toEqual([{ load_rate_limit: 60, submit_rate_limit: 10 }]);
+  });
+
+  it.each([
+    "load_rate_limit = 0",
+    "submit_rate_limit = -1",
+    "load_rate_limit = null",
+  ])("refuses a rate limit below one, or none: %s", async (set) => {
+    await expect(
+      db.query(`update public.settings set ${set}`),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/^23(514|502)$/) });
+  });
+
   it("holds a single row", async () => {
     await expect(
       db.query("insert into public.settings (allowed_origins) values ('{}')"),

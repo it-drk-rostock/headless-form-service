@@ -67,6 +67,14 @@ describe("submitForm", () => {
     );
   });
 
+  it("reports a 429 as too many attempts", async () => {
+    const { fetch } = fakeFetch(() => json({ error: "rate_limited" }, 429));
+
+    expect(await submitForm(SUBMISSION, { endpoint: ENDPOINT, fetch })).toEqual(
+      { kind: "error", reason: "rate_limited" },
+    );
+  });
+
   it.each([
     ["an unavailable queue", () => json({ error: "queue_unavailable" }, 503)],
     ["a server error", () => json({ error: "internal_error" }, 500)],

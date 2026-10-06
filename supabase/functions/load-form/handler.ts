@@ -3,11 +3,12 @@
 // pages on the allowed origins, and counts each load.
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
+import { allowedMethods, withCorsHeaders } from "../_shared/cors.ts";
 import {
-  allowedMethods,
-  handleCors,
-  withCorsHeaders,
-} from "../_shared/cors.ts";
+  admitPublicRequest,
+  type PublicEndpointSettings,
+  type RateLimiter,
+} from "../_shared/rate-limit.ts";
 
 /** What a visitor may be served of a form: its current version. */
 export type LoadedForm = {
@@ -17,8 +18,9 @@ export type LoadedForm = {
 };
 
 export type LoadFormDeps = {
-  /** The `settings` row's list, read per request so changes apply at once. */
-  allowedOrigins: () => Promise<string[]>;
+  /** With the load limit as `rateLimit`. */
+  settings: () => Promise<PublicEndpointSettings>;
+  withinRateLimit: RateLimiter;
   /** Null for an unknown, unpublished or archived form. */
   loadForm: (formId: string) => Promise<LoadedForm | null>;
   /** Adds one to today's load count of the form. */
@@ -33,9 +35,14 @@ export async function handleLoadForm(
 ): Promise<Response> {
   let origin: string | null = null;
   try {
-    const cors = handleCors(request, await deps.allowedOrigins(), METHODS);
-    if ("response" in cors) return cors.response;
-    origin = cors.origin;
+    const admitted = await admitPublicRequest(
+      request,
+      await deps.settings(),
+      deps.withinRateLimit,
+      METHODS,
+    );
+    if ("response" in admitted) return admitted.response;
+    origin = admitted.origin;
 
     return withCorsHeaders(await serve(request, deps), origin);
   } catch (error) {

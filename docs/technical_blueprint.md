@@ -140,7 +140,7 @@ A pass is valid when it is not revoked, not expired, and `max_uses IS NULL OR us
 
 ### 4.1 `/load-form` (public)
 1. CORS: the request origin must be on `allowed_origins`.
-2. Rate limit per IP (Redis sliding window).
+2. Rate limit per IP (Redis sliding window) → 429. If Redis fails or takes longer than a second, the request is let through: a Redis outage must not take the forms down.
 3. Load the form. If it is archived → 404. If it is closed → return a `closed` state.
 4. If the form is protected: validate the `form_pass` (without consuming it). If it is invalid → 403, and **no schema is returned**.
 5. Increment `form_load_counts`.

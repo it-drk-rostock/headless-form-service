@@ -1,10 +1,11 @@
 // Deno-only wiring shared by the public edge functions' entry points: the
-// secret-key client and the allowed origins it reads. Handlers never import
+// secret-key client and the settings it reads. Handlers never import
 // this; they get plain functions injected.
 import {
   createClient,
   type SupabaseClient,
 } from "npm:@supabase/supabase-js@2.117.2";
+import type { PublicEndpointSettings } from "./rate-limit.ts";
 
 /**
  * A client with the project's secret key, which the runtime injects as a JSON
@@ -27,16 +28,22 @@ export function createServiceClient(name: string): SupabaseClient {
   });
 }
 
-/** The `settings` row's allowed origins. */
-export async function readAllowedOrigins(
+/** The `settings` row's allowed origins and the endpoint's rate limit. */
+export async function readEndpointSettings(
   supabase: SupabaseClient,
-): Promise<string[]> {
+  endpoint: "load" | "submit",
+): Promise<PublicEndpointSettings> {
   const { data, error } = await supabase
     .from("settings")
-    .select("allowed_origins")
-    .maybeSingle();
+    .select(`allowed_origins, ${endpoint}_rate_limit`)
+    .maybeSingle<Record<string, unknown>>();
   if (error) throw error;
-  return data?.allowed_origins ?? [];
+  // Without the row no origin is allowed, so the limit never applies.
+  if (data === null) return { allowedOrigins: [], rateLimit: 0 };
+  return {
+    allowedOrigins: data.allowed_origins as string[],
+    rateLimit: data[`${endpoint}_rate_limit`] as number,
+  };
 }
 
 /**

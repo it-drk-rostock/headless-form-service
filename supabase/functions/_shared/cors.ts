@@ -1,7 +1,7 @@
 // CORS for the public edge functions (blueprint §4.1, §4.2): only pages on
 // the allowed origins list may call them. Other origins are refused on the
 // server too, not just hidden from the browser. A script outside a browser
-// can fake its origin; rate limiting (ticket 14) is what slows those down.
+// can fake its origin; rate limiting (rate-limit.ts) is what slows those down.
 // Web-standard APIs only, like the handlers.
 import { jsonResponse } from "../../../lib/shared/http.ts";
 

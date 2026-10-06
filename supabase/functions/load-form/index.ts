@@ -1,13 +1,19 @@
 // Thin Deno entry point: wire real dependencies into the portable handler.
 // All logic lives in handler.ts, which is tested under Vitest with fakes.
-import { createServiceClient, readAllowedOrigins } from "../_shared/service.ts";
+import { createRateLimiter } from "../_shared/redis.ts";
+import {
+  createServiceClient,
+  readEndpointSettings,
+} from "../_shared/service.ts";
 import { handleLoadForm, type LoadedForm } from "./handler.ts";
 
 const supabase = createServiceClient("load-form");
+const withinRateLimit = createRateLimiter("load-form");
 
 Deno.serve((request) =>
   handleLoadForm(request, {
-    allowedOrigins: () => readAllowedOrigins(supabase),
+    settings: () => readEndpointSettings(supabase, "load"),
+    withinRateLimit,
     loadForm: async (formId) => {
       const { data, error } = await supabase
         .rpc("load_form", { form: formId })

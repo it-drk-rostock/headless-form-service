@@ -11,30 +11,40 @@ const SCHEMA = {
   pages: [{ name: "seite1", elements: [{ type: "text", name: "vorname" }] }],
 };
 
-/** In-memory fakes: one published public form, and a record of counted loads. */
+/**
+ * In-memory fakes: one published public form, a record of counted loads, and
+ * a rate limiter that counts requests per IP without ever forgetting them.
+ */
 function fakes(
   forms: Record<string, LoadedForm> = {
     [FORM]: { version: 3, schema: SCHEMA, accessType: "public" },
   },
 ) {
   const counted: string[] = [];
+  const hits = new Map<string, number>();
   const deps: LoadFormDeps = {
-    allowedOrigins: async () => [ORIGIN],
+    settings: async () => ({ allowedOrigins: [ORIGIN], rateLimit: 60 }),
+    withinRateLimit: async (ip, perMinute) => {
+      const count = (hits.get(ip) ?? 0) + 1;
+      hits.set(ip, count);
+      return count <= perMinute;
+    },
     loadForm: async (id) => forms[id] ?? null,
     countLoad: async (id) => {
       counted.push(id);
     },
   };
-  return { deps, counted };
+  return { deps, counted, hits };
 }
 
 const get = (
   query: string,
-  init: RequestInit & { origin?: string | null } = {},
+  init: RequestInit & { origin?: string | null; ip?: string } = {},
 ) => {
   const headers = new Headers(init.headers);
   const origin = init.origin === undefined ? ORIGIN : init.origin;
   if (origin) headers.set("origin", origin);
+  headers.set("x-forwarded-for", init.ip ?? "203.0.113.7");
   return new Request(`https://example.test/load-form${query}`, {
     ...init,
     headers,
@@ -100,7 +110,7 @@ describe("handleLoadForm", () => {
   it("reads the allowed origins on every request", async () => {
     const { deps } = fakes();
     let origins = [ORIGIN];
-    deps.allowedOrigins = async () => origins;
+    deps.settings = async () => ({ allowedOrigins: origins, rateLimit: 60 });
 
     expect((await handleLoadForm(get(`?form_id=${FORM}`), deps)).status).toBe(
       200,
@@ -109,6 +119,63 @@ describe("handleLoadForm", () => {
     expect((await handleLoadForm(get(`?form_id=${FORM}`), deps)).status).toBe(
       403,
     );
+  });
+
+  it("answers 429 with CORS headers once an IP is over the load limit, without loading or counting", async () => {
+    const { deps, counted } = fakes();
+    deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 2 });
+
+    await handleLoadForm(get(`?form_id=${FORM}`), deps);
+    await handleLoadForm(get(`?form_id=${FORM}`), deps);
+    const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "rate_limited" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(counted).toEqual([FORM, FORM]);
+  });
+
+  it("limits each IP on its own, by the load limit from the settings", async () => {
+    const { deps } = fakes();
+    const limits: number[] = [];
+    deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 1 });
+    const count = deps.withinRateLimit;
+    deps.withinRateLimit = (ip, perMinute) => {
+      limits.push(perMinute);
+      return count(ip, perMinute);
+    };
+
+    await handleLoadForm(get(`?form_id=${FORM}`, { ip: "203.0.113.7" }), deps);
+    const other = await handleLoadForm(
+      get(`?form_id=${FORM}`, { ip: "198.51.100.4" }),
+      deps,
+    );
+
+    expect(other.status).toBe(200);
+    expect(limits).toEqual([1, 1]);
+  });
+
+  it("does not count other origins or preflights against the limit", async () => {
+    const { deps, hits } = fakes();
+
+    await handleLoadForm(
+      get(`?form_id=${FORM}`, { origin: "https://evil.example" }),
+      deps,
+    );
+    await handleLoadForm(get(`?form_id=${FORM}`, { method: "OPTIONS" }), deps);
+
+    expect(hits.size).toBe(0);
+  });
+
+  it("still serves the form when the rate limiter fails", async () => {
+    const { deps } = fakes();
+    deps.withinRateLimit = async () => {
+      throw new Error("redis down");
+    };
+
+    const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);
+
+    expect(response.status).toBe(200);
   });
 
   it("answers the preflight of an allowed origin", async () => {
@@ -199,9 +266,9 @@ describe("handleLoadForm", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
   });
 
-  it("answers 500 when the allowed origins cannot be read", async () => {
+  it("answers 500 when the settings cannot be read", async () => {
     const { deps } = fakes();
-    deps.allowedOrigins = async () => {
+    deps.settings = async () => {
       throw new Error("connection refused");
     };
 
