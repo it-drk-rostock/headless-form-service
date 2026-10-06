@@ -152,7 +152,7 @@ Request: `{ form_id, version, submission_id, form_pass?, turnstile_token?, honey
 1. CORS check, then rate limit per IP → 429.
 2. Check the honeypot: filled → 202 without doing anything else.
 3. Load the form and the submitted version. Closed or archived → 4xx. If the form has Turnstile on, verify the token with Cloudflare: missing or refused → 403; Cloudflare unable to tell → 503 (the check always applies).
-4. **Validate**: payload ≤ 64 KB. Answers for keys that are not questions of that version are dropped. Required and type checks are applied → 422.
+4. **Validate**: payload ≤ 64 KB, else 413 (counted while the body is read, so before step 2). Answers for keys that are not questions of that version are dropped. Required and type checks are applied → 422. Required questions that can be hidden or disabled (a condition on them or a panel or page around them, or a trigger that ends the survey or skips ahead) are left to the embed's SurveyJS validation, since only SurveyJS can evaluate the conditions.
 5. Protected forms: **claim** the pass atomically (`UPDATE … SET use_count = use_count + 1 WHERE token_hash = … AND <valid> RETURNING id, metadata`). No row → 403.
 6. Insert `form_stats` (`queued`) with `id = submission_id`. On conflict (a duplicate retry) → return 202 without publishing again.
 7. **Encrypt** `{ answers, pass_id }` with AES-GCM (key held only by the edge functions).

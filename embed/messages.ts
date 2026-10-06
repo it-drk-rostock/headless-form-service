@@ -25,6 +25,10 @@ export const submitMessages = {
   rate_limited: "Zu viele Einsendungen. Bitte versuchen Sie es später erneut.",
   turnstile_invalid:
     "Die Sicherheitsprüfung ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+  answers_invalid:
+    "Einige Angaben fehlen oder sind ungültig. Bitte prüfen Sie das Formular und versuchen Sie es erneut.",
+  too_large:
+    "Ihre Angaben sind zu umfangreich, um sie zu senden. Bitte kürzen Sie längere Antworten und versuchen Sie es erneut.",
   turnstile_pending:
     "Bitte warten Sie, bis die Sicherheitsprüfung unter dem Formular abgeschlossen ist, und versuchen Sie es dann erneut.",
   turnstile_unavailable:

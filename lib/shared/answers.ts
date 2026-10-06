@@ -16,6 +16,11 @@ export type AnsweredQuestion = {
   key: string;
   /** The question's SurveyJS JSON. */
   element: Record<string, unknown>;
+  /**
+   * Whether the question, or a panel or page around it, can be hidden or
+   * disabled, which depends on other answers only SurveyJS can evaluate.
+   */
+  mayBeSkipped: boolean;
 };
 
 /**
@@ -41,13 +46,14 @@ export function pickAnswers(schema: unknown, answers: Answers): Answers {
  */
 export function questionsOf(schema: unknown): AnsweredQuestion[] {
   const questions = new Map<string, AnsweredQuestion>();
-  const visit = (elements: unknown): void => {
+  const visit = (elements: unknown, insideSkippable: boolean): void => {
     if (!Array.isArray(elements)) return;
     for (const element of elements) {
       if (!isObject(element)) continue;
+      const mayBeSkipped = insideSkippable || isSkippable(element);
       // A panel only groups questions; its own name holds no answer.
       if (element.type === "panel") {
-        visit(element.elements);
+        visit(element.elements, mayBeSkipped);
         continue;
       }
       if (typeof element.type === "string" && WITHOUT_ANSWER.has(element.type))
@@ -56,7 +62,7 @@ export function questionsOf(schema: unknown): AnsweredQuestion[] {
       // dynamic panel's inner questions live inside its own value.
       const key = nonEmpty(element.valueName) ?? nonEmpty(element.name);
       if (key !== undefined && !questions.has(key)) {
-        questions.set(key, { key, element });
+        questions.set(key, { key, element, mayBeSkipped });
       }
     }
   };
@@ -64,12 +70,24 @@ export function questionsOf(schema: unknown): AnsweredQuestion[] {
   if (isObject(schema)) {
     if (Array.isArray(schema.pages)) {
       for (const page of schema.pages) {
-        if (isObject(page)) visit(page.elements);
+        if (isObject(page)) visit(page.elements, isSkippable(page));
       }
     }
-    visit(schema.elements);
+    visit(schema.elements, false);
   }
   return [...questions.values()];
+}
+
+/** Whether a page, panel or question may not be shown or editable. */
+function isSkippable(element: Record<string, unknown>): boolean {
+  return (
+    element.visible === false ||
+    element.readOnly === true ||
+    nonEmpty(element.visibleIf) !== undefined ||
+    nonEmpty(element.enableIf) !== undefined ||
+    // Hidden once its choices filter down to none.
+    element.hideIfChoicesEmpty === true
+  );
 }
 
 export function nonEmpty(value: unknown): string | undefined {

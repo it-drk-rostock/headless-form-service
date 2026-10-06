@@ -104,6 +104,24 @@ describe("submitForm", () => {
     );
   });
 
+  it("reports a 422 as answers to check", async () => {
+    const { fetch } = fakeFetch(() => json({ error: "answers_invalid" }, 422));
+
+    expect(await submitForm(SUBMISSION, { endpoint: ENDPOINT, fetch })).toEqual(
+      { kind: "error", reason: "answers_invalid" },
+    );
+  });
+
+  it("reports a 413 as answers too long to send", async () => {
+    const { fetch } = fakeFetch(() =>
+      json({ error: "payload_too_large" }, 413),
+    );
+
+    expect(await submitForm(SUBMISSION, { endpoint: ENDPOINT, fetch })).toEqual(
+      { kind: "error", reason: "too_large" },
+    );
+  });
+
   it.each([
     ["an unavailable queue", () => json({ error: "queue_unavailable" }, 503)],
     [

@@ -22,7 +22,7 @@ const SCHEMA = {
     {
       name: "seite1",
       elements: [
-        { type: "text", name: "vorname" },
+        { type: "text", name: "vorname", isRequired: true },
         { type: "text", name: "email" },
       ],
     },
@@ -264,6 +264,108 @@ describe("handleSubmitForm", () => {
 
     expect(response.status).toBe(202);
     expect(published).toHaveLength(1);
+  });
+
+  it("answers a retry with other answers 202, without publishing again", async () => {
+    const { deps, published } = fakes();
+    await handleSubmitForm(post(body()), deps);
+
+    const response = await handleSubmitForm(
+      post(body({ answers: { vorname: "Max" } })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ status: "accepted" });
+    expect(published).toHaveLength(1);
+    expect(await decrypted(published[0])).toEqual({
+      answers: { vorname: "Erika", email: "erika@example.org" },
+      pass_id: null,
+    });
+  });
+
+  it("answers a submission ID spelled in capitals 202 as the same submission", async () => {
+    const { deps, published } = fakes();
+    await handleSubmitForm(post(body()), deps);
+
+    const response = await handleSubmitForm(
+      post(body({ submission_id: SUBMISSION.toUpperCase() })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(published).toHaveLength(1);
+  });
+
+  it("answers 413 for a request over 64 KB, before reading it as a submission", async () => {
+    const { deps, stats, published, verified } = fakes();
+    // 2 bytes each in UTF-8: under 64 K characters, over 64 KB.
+    const long = "ä".repeat(33_000);
+
+    const response = await handleSubmitForm(
+      post(body({ answers: { vorname: long } })),
+      deps,
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "payload_too_large" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+    expect(verified).toEqual([]);
+  });
+
+  it("accepts a request of exactly 64 KB", async () => {
+    const { deps, published } = fakes();
+    const empty = JSON.stringify(body({ answers: { vorname: "" } }));
+    const vorname = "x".repeat(64 * 1024 - empty.length);
+    const payload = JSON.stringify(body({ answers: { vorname } }));
+    expect(new TextEncoder().encode(payload).byteLength).toBe(64 * 1024);
+
+    const response = await handleSubmitForm(post(payload), deps);
+
+    expect(response.status).toBe(202);
+    expect(published).toHaveLength(1);
+  });
+
+  it.each([
+    ["a required question left out", { email: "erika@example.org" }],
+    ["a required question left empty", { vorname: "" }],
+    ["an answer of the wrong type", { vorname: "Erika", email: ["a", "b"] }],
+  ])("answers 422 for %s, without queueing", async (_, answers) => {
+    const { deps, stats, published } = fakes();
+
+    const response = await handleSubmitForm(post(body({ answers })), deps);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "answers_invalid" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+  });
+
+  it("checks the answers only after dropping keys that are not questions", async () => {
+    const { deps, published } = fakes();
+
+    const response = await handleSubmitForm(
+      post(body({ answers: { vorname: "Erika", extra: { a: [1] } } })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(published).toHaveLength(1);
+  });
+
+  it("checks Turnstile before the answers", async () => {
+    const { deps } = fakes();
+
+    const response = await handleSubmitForm(
+      post(body({ answers: {}, turnstile_token: "forged" })),
+      deps,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "turnstile_invalid" });
   });
 
   it("refuses protected forms until form passes are claimed", async () => {

@@ -2,6 +2,7 @@
 // to send a submission. Records it in `form_stats` and queues its answers,
 // encrypted, in QStash, from where `/dispatch-email` delivers them. Answers
 // are stored nowhere on the way.
+import { answerProblems } from "../../../lib/shared/answer-validation.ts";
 import { type Answers, pickAnswers } from "../../../lib/shared/answers.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isObject } from "../../../lib/shared/object.ts";
@@ -70,6 +71,9 @@ const RATE_LIMIT_WINDOW = "1 h";
 /** QStash retries after the first attempt, with exponential backoff (§4.3). */
 const RETRIES = 3;
 
+/** The largest request body taken, in bytes (blueprint §4.2). */
+const MAX_BODY_BYTES = 64 * 1024;
+
 export async function handleSubmitForm(
   request: Request,
   deps: SubmitFormDeps,
@@ -103,7 +107,10 @@ async function submit(
     });
   }
 
-  const submission = parseSubmission(await request.text());
+  // Checked while reading, so an oversized body is never held in full.
+  const text = await readBody(request);
+  if (text === null) return reply({ error: "payload_too_large" }, 413);
+  const submission = parseSubmission(text);
   if (submission === null) return reply({ error: "request_invalid" }, 400);
   const { ids, answers, turnstileToken, honeypot } = submission;
 
@@ -123,16 +130,22 @@ async function submit(
     if (refused) return refused;
   }
 
+  const picked = pickAnswers(form.schema, answers);
+  const problems = answerProblems(form.schema, picked);
+  if (problems.length > 0) {
+    // Keys only, never the answers. The embed validates first, so this is a
+    // hand-made request or an embed out of step with the server.
+    console.warn("submit-form refused invalid answers", ids.formId, problems);
+    return reply({ error: "answers_invalid" }, 422);
+  }
+
   // Protected forms need a claimed form pass, which ticket 27 adds. Until
   // then nobody can submit them.
   if (form.accessType === "protected") {
     return reply({ error: "form_pass_invalid" }, 403);
   }
 
-  const encrypted = await deps.encrypt(ids, {
-    answers: pickAnswers(form.schema, answers),
-    pass_id: null,
-  });
+  const encrypted = await deps.encrypt(ids, { answers: picked, pass_id: null });
 
   // A retry of a submission QStash already has. A retry whose first publish
   // was never confirmed is published again; the deduplication ID keeps that
@@ -191,6 +204,35 @@ async function checkTurnstile(
     return reply({ error: "turnstile_unavailable" }, 503);
   }
   return passed ? null : reply({ error: "turnstile_invalid" }, 403);
+}
+
+/** The request body as text, or null once it is over `MAX_BODY_BYTES`. */
+async function readBody(request: Request): Promise<string | null> {
+  if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES) {
+    return null;
+  }
+  if (request.body === null) return "";
+  // The header may be missing or wrong, so the bytes themselves are counted.
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 /** The request body, or null when it is not a well-formed submission. */

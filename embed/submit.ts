@@ -7,6 +7,8 @@ export type SubmitFailure =
   | "pass_invalid"
   | "rate_limited"
   | "turnstile_invalid"
+  | "answers_invalid"
+  | "too_large"
   | "failed";
 
 export type SubmitResult =
@@ -54,6 +56,8 @@ export async function submitForm(
     if (response.status === 202) return { kind: "accepted" };
     if (response.status === 404) return failure("not_found");
     if (response.status === 429) return failure("rate_limited");
+    if (response.status === 422) return failure("answers_invalid");
+    if (response.status === 413) return failure("too_large");
     if (response.status === 403) {
       const code = await errorCode(response);
       if (code === "form_pass_invalid") return failure("pass_invalid");
