@@ -306,6 +306,13 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
   });
 
+  it("catches a sequence the anon role can use, and names it", async () => {
+    await db.exec("grant usage on sequence public.audit_log_id_seq to anon");
+    await expect(db.exec(checklist)).rejects.toThrow(
+      /RLS check 32 failed: anon has a privilege on public\.audit_log_id_seq/,
+    );
+  });
+
   it("catches a column the anon role can read", async () => {
     await db.exec("grant select (allowed_origins) on public.settings to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);

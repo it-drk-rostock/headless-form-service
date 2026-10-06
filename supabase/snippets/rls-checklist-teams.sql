@@ -404,6 +404,8 @@ set local role anon;
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 do $$
+declare
+  exposed text;
 begin
   -- 9. The anon role cannot read teams, memberships, the audit log, forms or
   -- form versions, nor publish (ADR-0004).
@@ -440,8 +442,7 @@ begin
 
   -- 32. The anon role has no privilege on any table, view or sequence of
   -- ours, and cannot call what /load-form calls (ADR-0004).
-  if exists (
-    select 1
+  select string_agg(n.nspname || '.' || c.relname, ', ') into exposed
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('public', 'private')
@@ -452,9 +453,9 @@ begin
                'select, insert, update, delete, truncate, references, trigger')
              or has_any_column_privilege('anon', c.oid,
                'select, insert, update, references')
-      end
-  ) then
-    raise exception 'RLS check 32 failed: anon has a privilege on a table, view or sequence';
+      end;
+  if exposed is not null then
+    raise exception 'RLS check 32 failed: anon has a privilege on %', exposed;
   end if;
   -- Asked of the grants, not by calling: load_form runs as its caller, so a
   -- call would fail on the tables even with a stray grant.

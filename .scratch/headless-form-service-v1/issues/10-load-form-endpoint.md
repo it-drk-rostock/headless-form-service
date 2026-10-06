@@ -63,3 +63,14 @@ Open points for the reviewer:
 - **Malformed IDs get 404**, not 400, so all "no such form" cases look alike.
 - **Settings seeded with only `http://localhost:3000`.** Add TYPO3 origins in the SQL editor until ticket 20 (README, "Loading forms").
 - **Day boundary is Europe/Berlin.** Ticket 32 should read the counts the same way.
+
+**2026-10-06, human → agent:** `db:push` worked, but the cloud checklist failed with `RLS check 32 failed: anon has a privilege on a table, view or sequence`.
+
+**2026-10-06, agent:** Cause: `audit_log.id` is an identity column. Its sequence `public.audit_log_id_seq` got Supabase's default grants on new sequences in `public`, which include anon. Revoking the table's grants doesn't touch its sequence. The PGlite stub copied the defaults for tables and functions but not for sequences, so `npm test` missed it. The check works as intended: it found a real exposure (low impact, since PostgREST doesn't serve sequences, but it still breaks ADR-0004).
+
+- New migration `20261006120000_audit_log_sequence_grants.sql` revokes the sequence from anon, authenticated and service_role. Nobody needs it: `private.record_audit()` writes as the table owner.
+- The stub now copies Supabase's sequence defaults too. With that, the checklist test failed until the migration was added.
+- Check 32 now names the exposed objects in its error.
+- `npm test` passes, 258 tests.
+
+For the human: run `npm run db:push` again, then rerun the checklist. Expect `RLS checklist passed: 32 of 32 checks`. Then continue with step 3 above.
