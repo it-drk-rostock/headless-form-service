@@ -113,6 +113,9 @@ export const de = {
     "Diese Adressen erhalten jede Einsendung als E-Mail. Eine Adresse pro Zeile, höchstens {maxRecipients}.",
   "forms.recipientsNone":
     "Noch keine Empfänger. Ohne Empfänger werden Einsendungen niemandem zugestellt.",
+  "forms.turnstile": "Bot-Schutz (Cloudflare Turnstile)",
+  "forms.turnstileHint":
+    "Besucher werden vor dem Absenden unauffällig geprüft, ob sie Menschen sind. Nur in Ausnahmefällen ausschalten.",
   "forms.save": "Speichern",
   "forms.saved": "Gespeichert.",
   "forms.detailTeam": "Team",
@@ -267,6 +270,9 @@ export const de = {
   "audit.summary.formCreated": "{name}",
   "audit.summary.formRenamed": "{from} → {to}",
   "audit.summary.formRecipientsChanged": "{name}: {changes}",
+  "audit.action.formTurnstileChanged": "Bot-Schutz geändert",
+  "audit.summary.formTurnstileOn": "{name}: eingeschaltet",
+  "audit.summary.formTurnstileOff": "{name}: ausgeschaltet",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
   "audit.summary.none": "keine",

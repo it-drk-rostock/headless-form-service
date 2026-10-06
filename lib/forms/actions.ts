@@ -60,8 +60,8 @@ export async function createForm(
 }
 
 /**
- * Saves a form's name and recipients. The database records recipient
- * changes in the audit log, in the same transaction.
+ * Saves a form's name, recipients and Turnstile switch. The database records
+ * the changes in the audit log, in the same transaction.
  */
 export async function updateFormSettings(
   _previous: FormActionState,
@@ -74,12 +74,18 @@ export async function updateFormSettings(
   const parsed = parseRecipients(String(formData.get("recipients") ?? ""));
   if ("error" in parsed) return parsed;
   if (!isFormId(id)) return { error: "forms.errorForbidden" };
+  // An unchecked switch sends nothing.
+  const turnstileEnabled = formData.get("turnstileEnabled") === "on";
 
   await requireProfile();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
-    .update({ name: name.trim(), recipients: parsed.recipients })
+    .update({
+      name: name.trim(),
+      recipients: parsed.recipients,
+      turnstile_enabled: turnstileEnabled,
+    })
     .eq("id", id)
     .select("id");
   if (error) return { error: writeError(error) };

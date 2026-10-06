@@ -6,6 +6,7 @@ export type SubmitFailure =
   | "not_found"
   | "pass_invalid"
   | "rate_limited"
+  | "turnstile_invalid"
   | "failed";
 
 export type SubmitResult =
@@ -18,6 +19,10 @@ export type Submission = {
   /** Generated once per form load and sent again on every retry. */
   submissionId: string;
   answers: Record<string, unknown>;
+  /** The widget's current token; null for forms without Turnstile. */
+  turnstileToken: string | null;
+  /** The hidden field, which only bots fill. */
+  honeypot: string;
 };
 
 export type SubmitDeps = {
@@ -39,17 +44,20 @@ export async function submitForm(
         version: submission.version,
         submission_id: submission.submissionId,
         answers: submission.answers,
+        ...(submission.turnstileToken === null
+          ? {}
+          : { turnstile_token: submission.turnstileToken }),
+        honeypot: submission.honeypot,
       }),
     });
     // Accepted means sent, to the visitor (GLOSSARY).
     if (response.status === 202) return { kind: "accepted" };
     if (response.status === 404) return failure("not_found");
     if (response.status === 429) return failure("rate_limited");
-    if (
-      response.status === 403 &&
-      (await errorCode(response)) === "form_pass_invalid"
-    ) {
-      return failure("pass_invalid");
+    if (response.status === 403) {
+      const code = await errorCode(response);
+      if (code === "form_pass_invalid") return failure("pass_invalid");
+      if (code === "turnstile_invalid") return failure("turnstile_invalid");
     }
     return failure("failed");
   } catch {

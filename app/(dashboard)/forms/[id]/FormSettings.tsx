@@ -6,6 +6,7 @@ import {
   Button,
   Group,
   Stack,
+  Switch,
   Text,
   Textarea,
   TextInput,
@@ -24,28 +25,34 @@ import { FormError } from "../../../_components/FormError.tsx";
 
 const initialState: FormActionState = { error: null };
 
-type Values = { name: string; recipients: string };
+type Values = { name: string; recipients: string; turnstileEnabled: boolean };
 
 /**
- * The form's name and recipients. *Speichern* sits top right and stays
- * disabled until something changed (ui-design §5).
+ * The form's name, recipients and bot protection. *Speichern* sits top right
+ * and stays disabled until something changed (ui-design §5).
  */
 export function FormSettings({
   id,
   name,
   recipients,
+  turnstileEnabled,
 }: {
   id: string;
   name: string;
   recipients: string[];
+  turnstileEnabled: boolean;
 }) {
   // What is stored, as the page last rendered it. A save refreshes the page,
   // so the normalised list (or another person's change) arrives here and
   // replaces what is in the inputs.
-  const stored: Values = { name, recipients: recipients.join("\n") };
+  const stored: Values = {
+    name,
+    recipients: recipients.join("\n"),
+    turnstileEnabled,
+  };
   const [shown, setShown] = useState<Values>(stored);
   const [values, setValues] = useState<Values>(stored);
-  if (shown.name !== stored.name || shown.recipients !== stored.recipients) {
+  if (!sameValues(shown, stored)) {
     setShown(stored);
     setValues(stored);
   }
@@ -53,8 +60,7 @@ export function FormSettings({
     updateFormSettings,
     initialState,
   );
-  const changed =
-    values.name !== stored.name || values.recipients !== stored.recipients;
+  const changed = !sameValues(values, stored);
 
   return (
     <Box component="form" action={formAction} mt={40} maw={800}>
@@ -120,7 +126,31 @@ export function FormSettings({
             {t("forms.recipientsNone")}
           </Text>
         )}
+        <Switch
+          name="turnstileEnabled"
+          label={t("forms.turnstile")}
+          description={t("forms.turnstileHint")}
+          checked={values.turnstileEnabled}
+          onChange={(event) =>
+            setValues({
+              ...values,
+              turnstileEnabled: event.currentTarget.checked,
+            })
+          }
+          // Label and description left, the toggle right (ui-design §5).
+          labelPosition="left"
+          styles={{ body: { justifyContent: "space-between", gap: 24 } }}
+          mt="xs"
+        />
       </Stack>
     </Box>
+  );
+}
+
+function sameValues(a: Values, b: Values): boolean {
+  return (
+    a.name === b.name &&
+    a.recipients === b.recipients &&
+    a.turnstileEnabled === b.turnstileEnabled
   );
 }

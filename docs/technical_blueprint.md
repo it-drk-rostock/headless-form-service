@@ -147,11 +147,11 @@ A pass is valid when it is not revoked, not expired, and `max_uses IS NULL OR us
 6. Return `{ version, schema, access_type, turnstile_site_key? }` for the current version.
 
 ### 4.2 `/submit-form` (public)
-Request: `{ form_id, version, submission_id, form_pass?, turnstile_token?, answers }`. The embed generates `submission_id` once per form load and reuses it on network retries.
+Request: `{ form_id, version, submission_id, form_pass?, turnstile_token?, honeypot, answers }`. `honeypot` is the value of a hidden field outside the questions, empty from people. The embed generates `submission_id` once per form load and reuses it on network retries.
 
 1. CORS check, then rate limit per IP → 429.
-2. Verify Turnstile (if enabled) and check the honeypot.
-3. Load the form and the submitted version. Closed or archived → 4xx.
+2. Check the honeypot: filled → 202 without doing anything else.
+3. Load the form and the submitted version. Closed or archived → 4xx. If the form has Turnstile on, verify the token with Cloudflare: missing or refused → 403; Cloudflare unable to tell → 503 (the check always applies).
 4. **Validate**: payload ≤ 64 KB. Answers for keys that are not questions of that version are dropped. Required and type checks are applied → 422.
 5. Protected forms: **claim** the pass atomically (`UPDATE … SET use_count = use_count + 1 WHERE token_hash = … AND <valid> RETURNING id, metadata`). No row → 403.
 6. Insert `form_stats` (`queued`) with `id = submission_id`. On conflict (a duplicate retry) → return 202 without publishing again.
@@ -249,6 +249,7 @@ There is a single cloud environment ([ADR-0006](./adr/0006-single-cloud-environm
 | `QSTASH_TOKEN` | `/submit-form`, dashboard server (retry from DLQ) |
 | `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY` | `/dispatch-email` |
 | `SUBMISSION_ENCRYPTION_KEYS` | `/submit-form`, `/dispatch-email` |
+| `TURNSTILE_SITE_KEY` (public, handed to the embed) | `/load-form` |
 | `TURNSTILE_SECRET_KEY` | `/submit-form` |
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | `/dispatch-email` |
 | `NOTIFICATION_SENDER_EMAIL` (the sender address, validated in Mailjet) | `/dispatch-email` |

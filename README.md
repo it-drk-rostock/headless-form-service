@@ -126,11 +126,11 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 
 ### Forms
 
-`public.forms` holds each team's forms: settings that take effect at once (name, recipients, and later closed, archived and the rest), plus the single draft. Any member of the owning team, and every Super Admin, can create a form and change its name and recipients. `/forms` lists the forms of all your teams, without archived ones. `/forms/[id]` shows a form's settings.
+`public.forms` holds each team's forms: settings that take effect at once (name, recipients, and later closed, archived and the rest), plus the single draft. Any member of the owning team, and every Super Admin, can create a form and change its name, recipients and bot protection (see *Bot protection* below). `/forms` lists the forms of all your teams, without archived ones. `/forms/[id]` shows a form's settings.
 
 - Creating a form asks which of your teams owns it. A form never moves to another team, and nobody deletes it through the Data API.
 - Recipients must be lower-case email addresses (the `public.email_address` domain, at most 20 per form). The dashboard accepts one per line, or separated by commas or semicolons, and stores them lower-case, each once. A new form starts without recipients; they are set afterwards, so every list shows up in the audit log as a change.
-- Creating, renaming and recipient changes are recorded in the audit log by database triggers, with the old and new value.
+- Creating, renaming, recipient changes and switching bot protection are recorded in the audit log by database triggers, with the old and new value.
 - Forms are part of `supabase/snippets/rls-checklist-teams.sql` (checks 20–25, plus 4 and 9).
 
 ### Publishing
@@ -144,7 +144,7 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 
 ### Loading forms
 
-The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).
+The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version, plus `turnstile_site_key` when the form has Turnstile on. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).
 
 - Only pages on `public.settings.allowed_origins` may call it. Other origins, and requests without an `Origin` header, get 403 before the form is looked at. The list is read on every request. Until the settings page exists (ticket 20), change it in the SQL editor: `update public.settings set allowed_origins = array['http://localhost:3000', 'https://www.drk-rostock.de'];`. Origins must match exactly, as the browser sends them: scheme, host and any port, without a trailing slash.
 - More than `settings.load_rate_limit` requests per minute from one IP get 429 `rate_limited` (see *Rate limiting* below).
@@ -154,7 +154,7 @@ The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supab
 
 ### Submitting forms
 
-The embed sends a completed form with `POST /functions/v1/submit-form` (`supabase/functions/submit-form/`), as JSON `{ form_id, version, submission_id, answers }` (blueprint §4.2). The embed makes one `submission_id` per form load and sends it again on every retry.
+The embed sends a completed form with `POST /functions/v1/submit-form` (`supabase/functions/submit-form/`), as JSON `{ form_id, version, submission_id, answers, turnstile_token?, honeypot }` (blueprint §4.2). The embed makes one `submission_id` per form load and sends it again on every retry.
 
 - The same allowed origins as `/load-form`. More than `settings.submit_rate_limit` requests per hour from one IP get 429 `rate_limited`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
 - Answers to keys that are not questions of that version are dropped (`lib/shared/answers.ts`).
@@ -190,6 +190,23 @@ Both functions need the Redis database's REST credentials, from the Upstash cons
 ```bash
 npx supabase secrets set UPSTASH_REDIS_REST_URL=<REST URL> UPSTASH_REDIS_REST_TOKEN=<REST token>
 ```
+
+### Bot protection
+
+Each form has *Bot-Schutz (Cloudflare Turnstile)* in its settings, on for new forms (`forms.turnstile_enabled`). It takes effect at once, also for visitors who already loaded the form (blueprint §4.2).
+
+- With it on, `/load-form` adds the widget's `turnstile_site_key`, and the embed loads Cloudflare's script (`https://challenges.cloudflare.com/turnstile/v0/api.js`) and renders the widget under the form. It shows only when Cloudflare needs the visitor to do something (`appearance: interaction-only`). Every *Abschließen* sends the widget's current token, and a failed send gets a new one, since each token is good for one check.
+- `/submit-form` checks the token with Cloudflare's siteverify, with the visitor's IP, after the rate limit and the form lookup. No token or a refused one gets 403 `turnstile_invalid`, and the embed says *Die Sicherheitsprüfung ist fehlgeschlagen …*. If Cloudflare cannot tell (unreachable, no answer in 5 s, `internal-error`, a wrong secret), the answer is 503 `turnstile_unavailable` and the embed shows its general error: like the rate limit, the check always applies.
+- If the visitor clicks *Abschließen* before the widget has a token, the embed asks them to wait, and sends nothing. If Cloudflare's script cannot load (for example because of the page's Content-Security-Policy) or the widget reports an error (say, a hostname the site key does not allow), it says so.
+- Every form, with Turnstile on or off, has a hidden `hfs_check` field outside the SurveyJS questions, which people never see or reach (named so browsers don't autofill it). A request whose `honeypot` is filled gets 202 `accepted`, so bots don't try again, and nothing is verified, queued or sent; the function logs the form ID. It is checked before the form is even looked up.
+
+Both functions need a key from the Turnstile widget in the Cloudflare dashboard (its hostnames: the TYPO3 sites). The site key is public, but is set the same way:
+
+```bash
+npx supabase secrets set TURNSTILE_SITE_KEY=<site key> TURNSTILE_SECRET_KEY=<secret key>
+```
+
+`/load-form` refuses to start without `TURNSTILE_SITE_KEY`, and `/submit-form` without `TURNSTILE_SECRET_KEY`.
 
 ### Delivering submissions
 
@@ -235,9 +252,10 @@ For TYPO3 admins:
 1. Add the site's origin to the allowed origins (see *Loading forms* above), e.g. `https://www.drk-rostock.de`. Without it, the form shows the loading error.
 2. If the site sends a Content-Security-Policy, it must allow:
    - `script-src https://<dashboard-domain>`, for `embed.js`;
-   - `connect-src https://qhjysorczroizpgmagpp.supabase.co`, for `/load-form` and `/submit-form`.
+   - `connect-src https://qhjysorczroizpgmagpp.supabase.co`, for `/load-form` and `/submit-form`;
+   - `script-src https://challenges.cloudflare.com` and `frame-src https://challenges.cloudflare.com`, for Turnstile (see *Bot protection* above).
 
-   Nothing else: the theme is added as a constructed stylesheet, so `style-src` needs no `'unsafe-inline'`, and the form loads no fonts or images. Browsers without constructed stylesheets (before Safari 16.4) fall back to a `<style>` element, which a `style-src` without `'unsafe-inline'` blocks; the form then shows unstyled. Turnstile (ticket 15) will add `https://challenges.cloudflare.com` to `script-src` and `frame-src`.
+   Nothing else: the theme is added as a constructed stylesheet, so `style-src` needs no `'unsafe-inline'`, and the form loads no fonts or images. Browsers without constructed stylesheets (before Safari 16.4) fall back to a `<style>` element, which a `style-src` without `'unsafe-inline'` blocks; the form then shows unstyled.
 
 ### Deploy to Cloudflare
 

@@ -48,6 +48,16 @@ const actions: Record<
         changes: recipientChanges(texts(d.from), texts(d.to)),
       }),
   },
+  "form.turnstile_changed": {
+    label: t("audit.action.formTurnstileChanged"),
+    summary: (d) =>
+      t(
+        d.enabled === true
+          ? "audit.summary.formTurnstileOn"
+          : "audit.summary.formTurnstileOff",
+        { name: text(d.name) },
+      ),
+  },
   "form.published": {
     label: t("audit.action.formPublished"),
     summary: (d) =>

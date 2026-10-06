@@ -31,8 +31,31 @@ describe("loadForm", () => {
 
     const result = await loadForm(FORM, { endpoint: ENDPOINT, fetch });
 
-    expect(result).toEqual({ kind: "ready", version: 3, schema: SCHEMA });
+    expect(result).toEqual({
+      kind: "ready",
+      version: 3,
+      schema: SCHEMA,
+      turnstileSiteKey: null,
+    });
     expect(requested).toEqual([`${ENDPOINT}?form_id=${FORM}`]);
+  });
+
+  it("returns the Turnstile site key of a form with Turnstile on", async () => {
+    const { fetch } = fakeFetch(() =>
+      json({
+        version: 3,
+        schema: SCHEMA,
+        access_type: "public",
+        turnstile_site_key: "0x4AAAAAAAtestsitekey",
+      }),
+    );
+
+    expect(await loadForm(FORM, { endpoint: ENDPOINT, fetch })).toEqual({
+      kind: "ready",
+      version: 3,
+      schema: SCHEMA,
+      turnstileSiteKey: "0x4AAAAAAAtestsitekey",
+    });
   });
 
   it("encodes the form ID taken from the page", async () => {

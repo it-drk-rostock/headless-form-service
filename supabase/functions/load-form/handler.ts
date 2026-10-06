@@ -15,6 +15,8 @@ export type LoadedForm = {
   version: number;
   schema: unknown;
   accessType: "public" | "protected";
+  /** Whether the embed must show the Turnstile widget. */
+  turnstileEnabled: boolean;
 };
 
 export type LoadFormDeps = {
@@ -25,6 +27,8 @@ export type LoadFormDeps = {
   loadForm: (formId: string) => Promise<LoadedForm | null>;
   /** Adds one to today's load count of the form. */
   countLoad: (formId: string) => Promise<void>;
+  /** Cloudflare's public key for the widget, handed out per form. */
+  turnstileSiteKey: string;
 };
 
 const METHODS = ["GET"];
@@ -85,5 +89,8 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
     version: form.version,
     schema: form.schema,
     access_type: form.accessType,
+    ...(form.turnstileEnabled
+      ? { turnstile_site_key: deps.turnstileSiteKey }
+      : {}),
   });
 }

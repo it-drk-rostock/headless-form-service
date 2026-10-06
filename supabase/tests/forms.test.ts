@@ -170,6 +170,16 @@ describe("form settings", () => {
     ]);
   });
 
+  it("can switch Turnstile off and on, for members of the owning team", async () => {
+    const rows = await queryAs(
+      db,
+      { userId: max },
+      "update public.forms set turnstile_enabled = false where id = $1 returning turnstile_enabled",
+      [form],
+    );
+    expect(rows).toEqual([{ turnstile_enabled: false }]);
+  });
+
   it("cannot be changed by members of other teams", async () => {
     const rows = await queryAs(
       db,
@@ -303,13 +313,44 @@ describe("the audit log", () => {
     );
   });
 
+  it("records switching Turnstile off and on", async () => {
+    const form = await createForm(firstAid, "Kursanmeldung");
+    await commitAs(
+      db,
+      { userId: max },
+      "update public.forms set turnstile_enabled = false where id = $1",
+      [form],
+    );
+    await commitAs(
+      db,
+      { userId: anna },
+      "update public.forms set turnstile_enabled = true where id = $1",
+      [form],
+    );
+    expect((await formEntries()).slice(-2)).toEqual([
+      {
+        team_id: firstAid,
+        actor_id: max,
+        action: "form.turnstile_changed",
+        entity_type: "form",
+        entity_id: form,
+        details: { name: "Kursanmeldung", enabled: false },
+      },
+      expect.objectContaining({
+        actor_id: anna,
+        action: "form.turnstile_changed",
+        details: { name: "Kursanmeldung", enabled: true },
+      }),
+    ]);
+  });
+
   it("records nothing when a save leaves name and recipients as they were", async () => {
     const form = await createForm(firstAid, "Kursanmeldung");
     const before = (await formEntries()).length;
     await commitAs(
       db,
       { userId: max },
-      "update public.forms set name = name, recipients = recipients where id = $1",
+      "update public.forms set name = name, recipients = recipients, turnstile_enabled = turnstile_enabled where id = $1",
       [form],
     );
     expect(await formEntries()).toHaveLength(before);

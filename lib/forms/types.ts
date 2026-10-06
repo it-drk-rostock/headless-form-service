@@ -15,6 +15,8 @@ export type FormSummary = {
 export type FormDetails = FormSummary & {
   /** Normalised addresses that receive the notification emails. */
   recipients: string[];
+  /** Whether visitors pass Cloudflare Turnstile before submitting. */
+  turnstileEnabled: boolean;
   /** The version visitors are served; null until the first publish. */
   currentVersion: number | null;
   createdAt: string;

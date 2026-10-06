@@ -9,6 +9,7 @@ import { Survey } from "survey-react-ui";
 import { loadForm } from "./load.ts";
 import { messages, submitMessages } from "./messages.ts";
 import { newSubmissionId, submitForm } from "./submit.ts";
+import { type BotCheck, createBotCheck } from "./turnstile.ts";
 
 // Set by the bundler from NEXT_PUBLIC_SUPABASE_URL.
 declare const __LOAD_FORM_URL__: string;
@@ -20,6 +21,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const EMBED_CSS = `
 .hfs-embed-message { margin: 0; padding: 1em; border: 1px solid #c8c8c8; border-radius: 4px; }
 .hfs-embed-message[role="alert"] { border-color: #e30613; }
+.hfs-embed-turnstile:not(:empty) { margin-top: 1em; }
 `;
 
 // Same as the dashboard's designer preview, so visitors see the texts the
@@ -84,10 +86,23 @@ async function mount(element: HTMLElement): Promise<void> {
     const model = new Model(result.schema);
     // Answers to questions a visitor hid again are not sent.
     model.clearInvisibleValues = "onHidden";
-    sendOnComplete(model, formId, result.version);
 
-    element.replaceChildren();
-    const root = createRoot(element, {
+    const surveyHost = document.createElement("div");
+    const turnstileHost = document.createElement("div");
+    turnstileHost.className = "hfs-embed-turnstile";
+    const honeypot = createHoneypot();
+    element.replaceChildren(surveyHost, turnstileHost, honeypot.wrapper);
+
+    const botCheck = createBotCheck(turnstileHost, result.turnstileSiteKey);
+    sendOnComplete(
+      model,
+      { formId, version: result.version },
+      botCheck,
+      honeypot,
+    );
+    model.onComplete.add(() => turnstileHost.remove());
+
+    const root = createRoot(surveyHost, {
       // Unmounting from inside React's own callback is not allowed.
       onUncaughtError: () =>
         queueMicrotask(() => {
@@ -105,9 +120,15 @@ async function mount(element: HTMLElement): Promise<void> {
  * Sends the answers when the visitor completes the form. The form stays open
  * until `/submit-form` accepts them, then shows its completion text; on an
  * error it shows a German message, and *Abschließen* tries again with the
- * same submission ID, so a retry is never a second submission.
+ * same submission ID, so a retry is never a second submission. Every attempt
+ * carries a fresh Turnstile token, when the form has Turnstile on.
  */
-function sendOnComplete(model: Model, formId: string, version: number): void {
+function sendOnComplete(
+  model: Model,
+  { formId, version }: { formId: string; version: number },
+  botCheck: BotCheck,
+  honeypot: Honeypot,
+): void {
   const submissionId = newSubmissionId();
   let sending = false;
   let accepted = false;
@@ -118,10 +139,23 @@ function sendOnComplete(model: Model, formId: string, version: number): void {
     options.allow = false;
     if (sending) return;
 
+    const check = botCheck.next();
+    if ("wait" in check) {
+      model.notify(submitMessages[check.wait], "error");
+      return;
+    }
+
     sending = true;
     model.notify(submitMessages.sending, "info");
     void submitForm(
-      { formId, version, submissionId, answers: model.data },
+      {
+        formId,
+        version,
+        submissionId,
+        answers: model.data,
+        turnstileToken: check.token,
+        honeypot: honeypot.input.value,
+      },
       {
         endpoint: __SUBMIT_FORM_URL__,
         fetch: (url, init) => fetch(url, { ...init, signal: timeout() }),
@@ -132,10 +166,41 @@ function sendOnComplete(model: Model, formId: string, version: number): void {
         accepted = true;
         model.doComplete();
       } else {
+        botCheck.reset();
         model.notify(submitMessages[outcome.reason], "error");
       }
     });
   });
+}
+
+/**
+ * A text field people never see or reach, outside the SurveyJS answers. Bots
+ * that fill every field fill it too, and `/submit-form` drops what they send.
+ * Styled through the CSSOM, which a Content-Security-Policy allows.
+ */
+type Honeypot = { wrapper: HTMLElement; input: HTMLInputElement };
+
+function createHoneypot(): Honeypot {
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute("aria-hidden", "true");
+  Object.assign(wrapper.style, {
+    position: "absolute",
+    left: "-10000px",
+    width: "1px",
+    height: "1px",
+    overflow: "hidden",
+  });
+  const label = document.createElement("label");
+  label.textContent = "Bitte leer lassen";
+  const input = document.createElement("input");
+  input.type = "text";
+  // A name browsers don't autofill, so people never fill it by accident.
+  input.name = "hfs_check";
+  input.tabIndex = -1;
+  input.autocomplete = "off";
+  label.append(input);
+  wrapper.append(label);
+  return { wrapper, input };
 }
 
 /** Older browsers (Safari before 16) lack the timeout and just wait. */

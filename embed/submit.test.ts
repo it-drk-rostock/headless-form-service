@@ -8,6 +8,8 @@ const SUBMISSION = {
   version: 3,
   submissionId: "0b9c2f4e-6a1d-4e8b-9f3c-5d7e1a2b4c6d",
   answers: { vorname: "Erika" },
+  turnstileToken: "token-from-the-widget",
+  honeypot: "",
 };
 
 /** A `fetch` that records each request and answers with `response`. */
@@ -46,7 +48,34 @@ describe("submitForm", () => {
       version: 3,
       submission_id: SUBMISSION.submissionId,
       answers: { vorname: "Erika" },
+      turnstile_token: "token-from-the-widget",
+      honeypot: "",
     });
+  });
+
+  it("sends no Turnstile token for a form without Turnstile, and the honeypot as filled", async () => {
+    const { fetch, requests } = fakeFetch(() =>
+      json({ status: "accepted" }, 202),
+    );
+
+    await submitForm(
+      { ...SUBMISSION, turnstileToken: null, honeypot: "spam" },
+      { endpoint: ENDPOINT, fetch },
+    );
+
+    const sent = JSON.parse(String(requests[0].init.body));
+    expect(sent).not.toHaveProperty("turnstile_token");
+    expect(sent.honeypot).toBe("spam");
+  });
+
+  it("reports a refused Turnstile token as a failed security check", async () => {
+    const { fetch } = fakeFetch(() =>
+      json({ error: "turnstile_invalid" }, 403),
+    );
+
+    expect(await submitForm(SUBMISSION, { endpoint: ENDPOINT, fetch })).toEqual(
+      { kind: "error", reason: "turnstile_invalid" },
+    );
   });
 
   it("reports a form that no longer takes this version as not found", async () => {
@@ -77,6 +106,10 @@ describe("submitForm", () => {
 
   it.each([
     ["an unavailable queue", () => json({ error: "queue_unavailable" }, 503)],
+    [
+      "an unavailable Turnstile check",
+      () => json({ error: "turnstile_unavailable" }, 503),
+    ],
     ["a server error", () => json({ error: "internal_error" }, 500)],
     ["a rejected request", () => json({ error: "request_invalid" }, 400)],
     ["a refused origin", () => json({ error: "origin_not_allowed" }, 403)],

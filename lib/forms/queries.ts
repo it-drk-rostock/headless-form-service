@@ -26,13 +26,14 @@ type FormRow = {
   archived_at: string | null;
   current_version: number | null;
   recipients: string[];
+  turnstile_enabled: boolean;
   created_at: string;
   updated_at: string;
   teams: { name: string };
 };
 
 const FORM_COLUMNS =
-  "id, name, team_id, is_closed, archived_at, current_version, recipients, created_at, updated_at, teams(name)";
+  "id, name, team_id, is_closed, archived_at, current_version, recipients, turnstile_enabled, created_at, updated_at, teams(name)";
 
 function toSummary(row: FormRow): FormSummary {
   return {
@@ -85,6 +86,7 @@ export const getForm = cache(
     return {
       ...toSummary(data),
       recipients: data.recipients,
+      turnstileEnabled: data.turnstile_enabled,
       currentVersion: data.current_version,
       createdAt: data.created_at,
     };

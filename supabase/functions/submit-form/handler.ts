@@ -9,6 +9,7 @@ import { isUuid } from "../../../lib/shared/uuid.ts";
 import { allowedMethods, withCorsHeaders } from "../_shared/cors.ts";
 import {
   admitPublicRequest,
+  clientIp,
   type PublicEndpointSettings,
   type RateLimiter,
 } from "../_shared/rate-limit.ts";
@@ -18,11 +19,14 @@ import type {
   SubmissionIds,
   SubmissionPayload,
 } from "../_shared/submission-crypto.ts";
+import type { TurnstileVerifier } from "../_shared/turnstile.ts";
 
 /** The submitted version of a form that takes submissions. */
 export type SubmittedForm = {
   schema: unknown;
   accessType: "public" | "protected";
+  /** The form's bot check, as set now (it lives on the form, not the version). */
+  turnstileEnabled: boolean;
 };
 
 export type PublishRequest = {
@@ -41,6 +45,7 @@ export type SubmitFormDeps = {
     formId: string,
     version: number,
   ) => Promise<SubmittedForm | null>;
+  verifyTurnstile: TurnstileVerifier;
   /**
    * Writes the `queued` stats row. False once QStash's message ID is recorded
    * for that ID: a retry of a submission QStash already has.
@@ -100,10 +105,23 @@ async function submit(
 
   const submission = parseSubmission(await request.text());
   if (submission === null) return reply({ error: "request_invalid" }, 400);
-  const { ids, answers } = submission;
+  const { ids, answers, turnstileToken, honeypot } = submission;
+
+  // Only bots fill the hidden field. They are told it worked, so they don't
+  // try again differently, and nothing is checked, stored or sent.
+  if (honeypot !== "") {
+    // No answers, only that it happened, to spot autofill dropping people.
+    console.warn("submit-form dropped a filled honeypot", ids.formId);
+    return accepted();
+  }
 
   const form = await deps.loadVersion(ids.formId, ids.version);
   if (form === null) return reply({ error: "form_not_found" }, 404);
+
+  if (form.turnstileEnabled) {
+    const refused = await checkTurnstile(request, turnstileToken, deps);
+    if (refused) return refused;
+  }
 
   // Protected forms need a claimed form pass, which ticket 27 adds. Until
   // then nobody can submit them.
@@ -154,10 +172,36 @@ async function submit(
   return accepted();
 }
 
+/**
+ * 403 for a missing or invalid Turnstile token, 503 when Cloudflare cannot
+ * tell. Null when the visitor passed. Each token is good for one check, so
+ * the embed gets a new one for every attempt.
+ */
+async function checkTurnstile(
+  request: Request,
+  token: string,
+  deps: SubmitFormDeps,
+): Promise<Response | null> {
+  if (token === "") return reply({ error: "turnstile_invalid" }, 403);
+  let passed: boolean;
+  try {
+    passed = await deps.verifyTurnstile(token, { ip: clientIp(request) });
+  } catch (error) {
+    console.error("submit-form could not verify Turnstile", error);
+    return reply({ error: "turnstile_unavailable" }, 503);
+  }
+  return passed ? null : reply({ error: "turnstile_invalid" }, 403);
+}
+
 /** The request body, or null when it is not a well-formed submission. */
-function parseSubmission(
-  text: string,
-): { ids: SubmissionIds; answers: Answers } | null {
+function parseSubmission(text: string): {
+  ids: SubmissionIds;
+  answers: Answers;
+  /** Empty when there is none; only forms with Turnstile on need one. */
+  turnstileToken: string;
+  /** The hidden field's value, empty from people. */
+  honeypot: string;
+} | null {
   let body: unknown;
   try {
     body = JSON.parse(text);
@@ -166,7 +210,14 @@ function parseSubmission(
   }
   if (!isObject(body)) return null;
 
-  const { form_id, version, submission_id, answers } = body;
+  const {
+    form_id,
+    version,
+    submission_id,
+    answers,
+    turnstile_token,
+    honeypot = "",
+  } = body;
   if (
     typeof form_id !== "string" ||
     !isUuid(form_id) ||
@@ -175,7 +226,8 @@ function parseSubmission(
     version < 1 ||
     typeof submission_id !== "string" ||
     !isUuid(submission_id) ||
-    !isObject(answers)
+    !isObject(answers) ||
+    typeof honeypot !== "string"
   ) {
     return null;
   }
@@ -187,6 +239,8 @@ function parseSubmission(
       version,
     },
     answers,
+    turnstileToken: typeof turnstile_token === "string" ? turnstile_token : "",
+    honeypot: honeypot.trim(),
   };
 }
 

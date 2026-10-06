@@ -58,10 +58,30 @@ describe("submission_form", () => {
     await publish(questions("nachname"));
 
     expect(await commitAs(db, "service", FORM_VERSION, [form, 1])).toEqual([
-      { schema: questions("vorname"), access_type: "public" },
+      {
+        schema: questions("vorname"),
+        access_type: "public",
+        turnstile_enabled: true,
+      },
     ]);
     expect(await commitAs(db, "service", FORM_VERSION, [form, 2])).toEqual([
-      { schema: questions("nachname"), access_type: "public" },
+      {
+        schema: questions("nachname"),
+        access_type: "public",
+        turnstile_enabled: true,
+      },
+    ]);
+  });
+
+  it("serves the form's Turnstile setting as it is now", async () => {
+    await publish(questions("vorname"));
+    await db.query(
+      "update public.forms set turnstile_enabled = false where id = $1",
+      [form],
+    );
+
+    expect(await commitAs(db, "service", FORM_VERSION, [form, 1])).toEqual([
+      expect.objectContaining({ turnstile_enabled: false }),
     ]);
   });
 

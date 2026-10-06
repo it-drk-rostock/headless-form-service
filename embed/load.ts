@@ -9,7 +9,13 @@ export type LoadFailure =
   | "failed";
 
 export type LoadResult =
-  | { kind: "ready"; version: number; schema: object }
+  | {
+      kind: "ready";
+      version: number;
+      schema: object;
+      /** Set when the form has Turnstile on: the widget's public key. */
+      turnstileSiteKey: string | null;
+    }
   | { kind: "error"; reason: LoadFailure };
 
 export type LoadDeps = {
@@ -37,7 +43,16 @@ export async function loadForm(
       return failure("pass_invalid");
     }
     if (response.ok && isLoadedForm(body)) {
-      return { kind: "ready", version: body.version, schema: body.schema };
+      return {
+        kind: "ready",
+        version: body.version,
+        schema: body.schema,
+        turnstileSiteKey:
+          "turnstile_site_key" in body &&
+          typeof body.turnstile_site_key === "string"
+            ? body.turnstile_site_key
+            : null,
+      };
     }
     return failure("failed");
   } catch {

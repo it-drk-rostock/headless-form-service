@@ -84,6 +84,7 @@ export default async function FormPage({
                 id={form.id}
                 name={form.name}
                 recipients={form.recipients}
+                turnstileEnabled={form.turnstileEnabled}
               />
             </>
           ),

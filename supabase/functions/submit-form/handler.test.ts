@@ -16,6 +16,7 @@ import {
 const ORIGIN = "https://www.drk-rostock.de";
 const FORM = "3f6c1a52-8d0e-4b7a-9c1d-2e5f8a9b0c1d";
 const SUBMISSION = "0b9c2f4e-6a1d-4e8b-9f3c-5d7e1a2b4c6d";
+const TOKEN = "turnstile-token-from-the-widget";
 const SCHEMA = {
   pages: [
     {
@@ -36,19 +37,25 @@ beforeAll(async () => {
 });
 
 /**
- * In-memory fakes: version 2 of one public form, the `form_stats` rows, the
- * messages QStash accepted, and a rate limiter that counts requests per IP
- * without ever forgetting them.
+ * In-memory fakes: version 2 of one public form with Turnstile on, the
+ * `form_stats` rows, the messages QStash accepted, a rate limiter that counts
+ * requests per IP without ever forgetting them, and a Turnstile verifier that
+ * knows one token and records what it was asked.
  */
 function fakes(
   versions: Record<string, SubmittedForm> = {
-    [`${FORM}/2`]: { schema: SCHEMA, accessType: "public" },
+    [`${FORM}/2`]: {
+      schema: SCHEMA,
+      accessType: "public",
+      turnstileEnabled: true,
+    },
   },
 ) {
   const stats = new Map<string, { formId: string; version: number }>();
   const messageIds = new Map<string, string>();
   const published: PublishRequest[] = [];
   const hits = new Map<string, number>();
+  const verified: { token: string; ip: string }[] = [];
   const deps: SubmitFormDeps = {
     settings: async () => ({ allowedOrigins: [ORIGIN], rateLimit: 10 }),
     withinRateLimit: async (ip, { requests }) => {
@@ -58,6 +65,10 @@ function fakes(
     },
     loadVersion: async (formId, version) =>
       versions[`${formId}/${version}`] ?? null,
+    verifyTurnstile: async (token, { ip }) => {
+      verified.push({ token, ip });
+      return token === TOKEN;
+    },
     // Like `queue_submission`: false only once QStash's message ID is kept.
     queue: async ({ submissionId, formId, version }) => {
       if (messageIds.has(submissionId)) return false;
@@ -76,7 +87,7 @@ function fakes(
       return { messageId: `msg_${published.length}` };
     },
   };
-  return { deps, stats, messageIds, published, hits };
+  return { deps, stats, messageIds, published, hits, verified };
 }
 
 const body = (overrides: Record<string, unknown> = {}) => ({
@@ -84,6 +95,8 @@ const body = (overrides: Record<string, unknown> = {}) => ({
   version: 2,
   submission_id: SUBMISSION,
   answers: { vorname: "Erika", email: "erika@example.org" },
+  turnstile_token: TOKEN,
+  honeypot: "",
   ...overrides,
 });
 
@@ -255,7 +268,11 @@ describe("handleSubmitForm", () => {
 
   it("refuses protected forms until form passes are claimed", async () => {
     const { deps, stats, published } = fakes({
-      [`${FORM}/2`]: { schema: SCHEMA, accessType: "protected" },
+      [`${FORM}/2`]: {
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: true,
+      },
     });
 
     const response = await handleSubmitForm(post(body()), deps);
@@ -264,6 +281,147 @@ describe("handleSubmitForm", () => {
     expect(await response.json()).toEqual({ error: "form_pass_invalid" });
     expect(stats.size).toBe(0);
     expect(published).toEqual([]);
+  });
+
+  it("verifies the Turnstile token with the visitor's IP before queueing", async () => {
+    const { deps, verified } = fakes();
+
+    const response = await handleSubmitForm(
+      post(body(), { ip: "198.51.100.4" }),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(verified).toEqual([{ token: TOKEN, ip: "198.51.100.4" }]);
+  });
+
+  it.each([
+    ["no Turnstile token", body({ turnstile_token: undefined })],
+    ["an empty Turnstile token", body({ turnstile_token: "" })],
+    ["a Turnstile token that is not text", body({ turnstile_token: 42 })],
+    ["an invalid Turnstile token", body({ turnstile_token: "forged" })],
+  ])("answers 403 for %s, without queueing", async (_, payload) => {
+    const { deps, stats, published } = fakes();
+
+    const response = await handleSubmitForm(post(payload), deps);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "turnstile_invalid" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+  });
+
+  it("does not ask Cloudflare about a missing token", async () => {
+    const { deps, verified } = fakes();
+
+    await handleSubmitForm(post(body({ turnstile_token: undefined })), deps);
+
+    expect(verified).toEqual([]);
+  });
+
+  it("answers 503 when Turnstile cannot be verified, without queueing", async () => {
+    const { deps, stats, published } = fakes();
+    deps.verifyTurnstile = async () => {
+      throw new Error("siteverify unreachable");
+    };
+
+    const response = await handleSubmitForm(post(body()), deps);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "turnstile_unavailable" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+  });
+
+  it("needs no Turnstile token for a form with Turnstile off", async () => {
+    const { deps, published, verified } = fakes({
+      [`${FORM}/2`]: {
+        schema: SCHEMA,
+        accessType: "public",
+        turnstileEnabled: false,
+      },
+    });
+
+    const response = await handleSubmitForm(
+      post(body({ turnstile_token: undefined })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(published).toHaveLength(1);
+    expect(verified).toEqual([]);
+  });
+
+  it("checks Turnstile before refusing a protected form", async () => {
+    const { deps } = fakes({
+      [`${FORM}/2`]: {
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: true,
+      },
+    });
+
+    const response = await handleSubmitForm(
+      post(body({ turnstile_token: "forged" })),
+      deps,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "turnstile_invalid" });
+  });
+
+  it("answers 202 to a filled honeypot without verifying, queueing or publishing", async () => {
+    const { deps, stats, published, verified } = fakes();
+
+    const response = await handleSubmitForm(
+      post(body({ honeypot: "https://spam.example" })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ status: "accepted" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+    expect(verified).toEqual([]);
+  });
+
+  it("drops a filled honeypot even for an unknown form", async () => {
+    const { deps, published } = fakes();
+
+    const response = await handleSubmitForm(
+      post(body({ version: 3, honeypot: "x" })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(published).toEqual([]);
+  });
+
+  it("accepts a submission without a honeypot field", async () => {
+    const { deps, published } = fakes();
+
+    const response = await handleSubmitForm(
+      post(body({ honeypot: undefined })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(published).toHaveLength(1);
+  });
+
+  it("does not pass the honeypot or the token on as answers", async () => {
+    const { deps, published } = fakes();
+
+    await handleSubmitForm(post(body()), deps);
+
+    expect(await decrypted(published[0])).toEqual({
+      answers: { vorname: "Erika", email: "erika@example.org" },
+      pass_id: null,
+    });
+    expect(JSON.stringify(published[0])).not.toContain(TOKEN);
   });
 
   it.each([
@@ -276,6 +434,7 @@ describe("handleSubmitForm", () => {
     ["a submission ID that is not a UUID", body({ submission_id: "1" })],
     ["answers that are not an object", body({ answers: ["Erika"] })],
     ["no answers", body({ answers: undefined })],
+    ["a honeypot that is not text", body({ honeypot: ["x"] })],
   ])("answers 400 for %s", async (_, payload) => {
     const { deps, stats, published } = fakes();
 

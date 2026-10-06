@@ -8,6 +8,7 @@ import {
 
 const ORIGIN = "https://www.drk-rostock.de";
 const FORM = "3f6c1a52-8d0e-4b7a-9c1d-2e5f8a9b0c1d";
+const SITE_KEY = "0x4AAAAAAAtestsitekey";
 const SCHEMA = {
   pages: [{ name: "seite1", elements: [{ type: "text", name: "vorname" }] }],
 };
@@ -18,7 +19,12 @@ const SCHEMA = {
  */
 function fakes(
   forms: Record<string, LoadedForm> = {
-    [FORM]: { version: 3, schema: SCHEMA, accessType: "public" },
+    [FORM]: {
+      version: 3,
+      schema: SCHEMA,
+      accessType: "public",
+      turnstileEnabled: false,
+    },
   },
 ) {
   const counted: string[] = [];
@@ -34,6 +40,7 @@ function fakes(
     countLoad: async (id) => {
       counted.push(id);
     },
+    turnstileSiteKey: SITE_KEY,
   };
   return { deps, counted, hits };
 }
@@ -66,6 +73,27 @@ describe("handleLoadForm", () => {
     });
     expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("hands out the Turnstile site key for a form with Turnstile on", async () => {
+    const { deps } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        accessType: "public",
+        turnstileEnabled: true,
+      },
+    });
+
+    const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      version: 3,
+      schema: SCHEMA,
+      access_type: "public",
+      turnstile_site_key: SITE_KEY,
+    });
   });
 
   it("counts each load it serves", async () => {
@@ -238,7 +266,12 @@ describe("handleLoadForm", () => {
 
   it("does not hand out a protected form's questions, without counting", async () => {
     const { deps, counted } = fakes({
-      [FORM]: { version: 1, schema: SCHEMA, accessType: "protected" },
+      [FORM]: {
+        version: 1,
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: true,
+      },
     });
 
     const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);

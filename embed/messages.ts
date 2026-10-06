@@ -1,5 +1,6 @@
 import type { LoadFailure } from "./load.ts";
 import type { SubmitFailure } from "./submit.ts";
+import type { BotCheckWait } from "./turnstile.ts";
 
 /**
  * The embed's fixed German texts (blueprint §1.2). Visitors read them on
@@ -22,6 +23,12 @@ export const submitMessages = {
     "Dieses Formular nimmt keine Einsendungen mehr an. Bitte laden Sie die Seite neu.",
   pass_invalid: messages.pass_invalid,
   rate_limited: "Zu viele Einsendungen. Bitte versuchen Sie es später erneut.",
+  turnstile_invalid:
+    "Die Sicherheitsprüfung ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+  turnstile_pending:
+    "Bitte warten Sie, bis die Sicherheitsprüfung unter dem Formular abgeschlossen ist, und versuchen Sie es dann erneut.",
+  turnstile_unavailable:
+    "Die Sicherheitsprüfung konnte nicht geladen werden. Bitte laden Sie die Seite neu.",
   failed:
     "Ihre Angaben konnten nicht gesendet werden. Bitte versuchen Sie es in einem Moment erneut.",
-} satisfies Record<SubmitFailure | "sending", string>;
+} satisfies Record<SubmitFailure | BotCheckWait | "sending", string>;

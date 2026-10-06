@@ -113,6 +113,18 @@ describe("describeAuditEntry", () => {
     });
   });
 
+  it.each([
+    [false, "Kontakt: ausgeschaltet"],
+    [true, "Kontakt: eingeschaltet"],
+  ])("describes switching Turnstile (on: %s)", (enabled, summary) => {
+    expect(
+      describeAuditEntry({
+        action: "form.turnstile_changed",
+        details: { name: "Kontakt", enabled },
+      }),
+    ).toEqual({ action: "Bot-Schutz geändert", summary });
+  });
+
   it("shows actions it does not know yet as they are stored", () => {
     expect(
       describeAuditEntry({

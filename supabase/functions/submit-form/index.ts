@@ -11,6 +11,7 @@ import {
   encryptSubmission,
   parseEncryptionKeys,
 } from "../_shared/submission-crypto.ts";
+import { createTurnstileVerifier } from "../_shared/turnstile.ts";
 import { handleSubmitForm, type SubmittedForm } from "./handler.ts";
 
 const supabase = createServiceClient("submit-form");
@@ -20,11 +21,13 @@ const withinRateLimit = createRateLimiter("submit-form");
 // default URL is its EU region (ADR-0002).
 const qstashToken = Deno.env.get("QSTASH_TOKEN");
 const encryptionKeys = Deno.env.get("SUBMISSION_ENCRYPTION_KEYS");
-if (!qstashToken || !encryptionKeys) {
+const turnstileSecret = Deno.env.get("TURNSTILE_SECRET_KEY");
+if (!qstashToken || !encryptionKeys || !turnstileSecret) {
   throw new Error(
-    "submit-form needs the secrets QSTASH_TOKEN and SUBMISSION_ENCRYPTION_KEYS.",
+    "submit-form needs the secrets QSTASH_TOKEN, SUBMISSION_ENCRYPTION_KEYS and TURNSTILE_SECRET_KEY.",
   );
 }
+const verifyTurnstile = createTurnstileVerifier(turnstileSecret);
 const keys = await parseEncryptionKeys(encryptionKeys);
 const qstash = new Client({
   token: qstashToken,
@@ -46,12 +49,18 @@ Deno.serve((request) =>
         .maybeSingle<{
           schema: unknown;
           access_type: SubmittedForm["accessType"];
+          turnstile_enabled: boolean;
         }>();
       if (error) throw error;
       return data === null
         ? null
-        : { schema: data.schema, accessType: data.access_type };
+        : {
+            schema: data.schema,
+            accessType: data.access_type,
+            turnstileEnabled: data.turnstile_enabled,
+          };
     },
+    verifyTurnstile,
     queue: async ({ submissionId, formId, version }) => {
       const { data, error } = await supabase.rpc("queue_submission", {
         submission: submissionId,
