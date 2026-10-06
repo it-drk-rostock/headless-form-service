@@ -28,6 +28,9 @@ export async function bundleEmbed({
       __LOAD_FORM_URL__: JSON.stringify(
         new URL("/functions/v1/load-form", supabaseUrl).href,
       ),
+      __SUBMIT_FORM_URL__: JSON.stringify(
+        new URL("/functions/v1/submit-form", supabaseUrl).href,
+      ),
     },
     logLevel: "silent",
   });

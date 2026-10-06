@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { bundleEmbed } from "./bundle.mts";
 
 describe("bundleEmbed", () => {
-  it("builds one self-contained script with the form library, theme and endpoint", async () => {
+  it("builds one self-contained script with the form library, theme and endpoints", async () => {
     const script = await bundleEmbed({
       supabaseUrl: "https://project.supabase.co",
     });
@@ -11,6 +11,9 @@ describe("bundleEmbed", () => {
     expect(script).not.toMatch(/^\s*(import|export)\s/m);
     expect(script).toContain(
       "https://project.supabase.co/functions/v1/load-form",
+    );
+    expect(script).toContain(
+      "https://project.supabase.co/functions/v1/submit-form",
     );
     // SurveyJS's default theme, bundled rather than loaded from elsewhere.
     expect(script).toContain(".sd-root-modern");

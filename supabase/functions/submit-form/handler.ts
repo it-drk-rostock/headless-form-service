@@ -1,0 +1,186 @@
+// `/submit-form` (blueprint §4.2, ADR-0001, ADR-0004): the embed's only way
+// to send a submission. Records it in `form_stats` and queues its answers,
+// encrypted, in QStash, from where `/dispatch-email` delivers them. Answers
+// are stored nowhere on the way.
+import { type Answers, pickAnswers } from "../../../lib/shared/answers.ts";
+import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
+import { isObject } from "../../../lib/shared/object.ts";
+import { isUuid } from "../../../lib/shared/uuid.ts";
+import {
+  allowedMethods,
+  handleCors,
+  withCorsHeaders,
+} from "../_shared/cors.ts";
+import type {
+  EncryptedSubmission,
+  QueuedSubmission,
+  SubmissionIds,
+  SubmissionPayload,
+} from "../_shared/submission-crypto.ts";
+
+/** The submitted version of a form that takes submissions. */
+export type SubmittedForm = {
+  schema: unknown;
+  accessType: "public" | "protected";
+};
+
+export type PublishRequest = {
+  body: QueuedSubmission;
+  /** QStash drops a message whose ID it has seen recently. */
+  deduplicationId: string;
+  retries: number;
+};
+
+export type SubmitFormDeps = {
+  /** The `settings` row's list, read per request so changes apply at once. */
+  allowedOrigins: () => Promise<string[]>;
+  /** Null for an unknown version, or a form unpublished or archived. */
+  loadVersion: (
+    formId: string,
+    version: number,
+  ) => Promise<SubmittedForm | null>;
+  /**
+   * Writes the `queued` stats row. False once QStash's message ID is recorded
+   * for that ID: a retry of a submission QStash already has.
+   */
+  queue: (ids: SubmissionIds) => Promise<boolean>;
+  /** Removes the stats row of a submission that could not be queued. */
+  unqueue: (submissionId: string) => Promise<void>;
+  /** Keeps QStash's message ID with the stats row. */
+  recordMessage: (submissionId: string, messageId: string) => Promise<void>;
+  encrypt: (
+    ids: SubmissionIds,
+    payload: SubmissionPayload,
+  ) => Promise<EncryptedSubmission>;
+  publish: (request: PublishRequest) => Promise<{ messageId: string }>;
+};
+
+const METHODS = ["POST"];
+
+/** QStash retries after the first attempt, with exponential backoff (§4.3). */
+const RETRIES = 3;
+
+export async function handleSubmitForm(
+  request: Request,
+  deps: SubmitFormDeps,
+): Promise<Response> {
+  let origin: string | null = null;
+  try {
+    const cors = handleCors(request, await deps.allowedOrigins(), METHODS);
+    if ("response" in cors) return cors.response;
+    origin = cors.origin;
+
+    return withCorsHeaders(await submit(request, deps), origin);
+  } catch (error) {
+    console.error("submit-form failed", error);
+    const response = reply({ error: "internal_error" }, 500);
+    return origin === null ? response : withCorsHeaders(response, origin);
+  }
+}
+
+async function submit(
+  request: Request,
+  deps: SubmitFormDeps,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return reply({ error: "method_not_allowed" }, 405, {
+      allow: allowedMethods(METHODS),
+    });
+  }
+
+  const submission = parseSubmission(await request.text());
+  if (submission === null) return reply({ error: "request_invalid" }, 400);
+  const { ids, answers } = submission;
+
+  const form = await deps.loadVersion(ids.formId, ids.version);
+  if (form === null) return reply({ error: "form_not_found" }, 404);
+
+  // Protected forms need a claimed form pass, which ticket 27 adds. Until
+  // then nobody can submit them.
+  if (form.accessType === "protected") {
+    return reply({ error: "form_pass_invalid" }, 403);
+  }
+
+  const encrypted = await deps.encrypt(ids, {
+    answers: pickAnswers(form.schema, answers),
+    pass_id: null,
+  });
+
+  // A retry of a submission QStash already has. A retry whose first publish
+  // was never confirmed is published again; the deduplication ID keeps that
+  // to one message.
+  if (!(await deps.queue(ids))) return accepted();
+
+  let messageId: string;
+  try {
+    ({ messageId } = await deps.publish({
+      body: {
+        submission_id: ids.submissionId,
+        form_id: ids.formId,
+        version: ids.version,
+        encrypted,
+      },
+      deduplicationId: ids.submissionId,
+      retries: RETRIES,
+    }));
+  } catch (error) {
+    console.error("submit-form could not publish to QStash", error);
+    // Without its row the visitor can send the same submission again.
+    try {
+      await deps.unqueue(ids.submissionId);
+    } catch (unqueueError) {
+      console.error("submit-form could not remove the stats row", unqueueError);
+    }
+    return reply({ error: "queue_unavailable" }, 503);
+  }
+
+  // The message ID only helps find a dead-lettered message later, so the
+  // submission is accepted without it.
+  try {
+    await deps.recordMessage(ids.submissionId, messageId);
+  } catch (error) {
+    console.error("submit-form could not keep the message ID", error);
+  }
+  return accepted();
+}
+
+/** The request body, or null when it is not a well-formed submission. */
+function parseSubmission(
+  text: string,
+): { ids: SubmissionIds; answers: Answers } | null {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isObject(body)) return null;
+
+  const { form_id, version, submission_id, answers } = body;
+  if (
+    typeof form_id !== "string" ||
+    !isUuid(form_id) ||
+    typeof version !== "number" ||
+    !Number.isSafeInteger(version) ||
+    version < 1 ||
+    typeof submission_id !== "string" ||
+    !isUuid(submission_id) ||
+    !isObject(answers)
+  ) {
+    return null;
+  }
+  return {
+    // Lowercase, so a retry spelled differently is still the same row.
+    ids: {
+      submissionId: submission_id.toLowerCase(),
+      formId: form_id.toLowerCase(),
+      version,
+    },
+    answers,
+  };
+}
+
+/** Accepted means sent, to the visitor (GLOSSARY). */
+function accepted(): Response {
+  return reply({ status: "accepted" }, 202);
+}

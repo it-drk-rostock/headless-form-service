@@ -6,3 +6,15 @@ export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   headers.set("content-type", "application/json; charset=utf-8");
   return new Response(JSON.stringify(body), { ...init, headers });
 }
+
+/** JSON that is never cached, as the public edge functions answer. */
+export function noStoreJsonResponse(
+  body: unknown,
+  status = 200,
+  headers: Record<string, string> = {},
+): Response {
+  return jsonResponse(body, {
+    status,
+    headers: { "cache-control": "no-store", ...headers },
+  });
+}

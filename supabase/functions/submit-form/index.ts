@@ -1,0 +1,77 @@
+// Thin Deno entry point: wire real dependencies into the portable handler.
+// All logic lives in handler.ts, which is tested under Vitest with fakes.
+import { Client } from "npm:@upstash/qstash@2.12.0";
+import { createServiceClient, readAllowedOrigins } from "../_shared/service.ts";
+import {
+  encryptSubmission,
+  parseEncryptionKeys,
+} from "../_shared/submission-crypto.ts";
+import { handleSubmitForm, type SubmittedForm } from "./handler.ts";
+
+const supabase = createServiceClient("submit-form");
+
+// Set with `supabase secrets set` (README, "Submitting forms"). QStash's
+// default URL is its EU region (ADR-0002).
+const qstashToken = Deno.env.get("QSTASH_TOKEN");
+const encryptionKeys = Deno.env.get("SUBMISSION_ENCRYPTION_KEYS");
+if (!qstashToken || !encryptionKeys) {
+  throw new Error(
+    "submit-form needs the secrets QSTASH_TOKEN and SUBMISSION_ENCRYPTION_KEYS.",
+  );
+}
+const keys = await parseEncryptionKeys(encryptionKeys);
+const qstash = new Client({
+  token: qstashToken,
+  baseUrl: Deno.env.get("QSTASH_URL") || undefined,
+  // The visitor waits on this: two quick retries, not the SDK's five (about
+  // 12 s). The deduplication ID makes a retried publish safe.
+  retry: { retries: 2 },
+});
+// Where QStash delivers each submission (ticket 13).
+const dispatchUrl = new URL(
+  "/functions/v1/dispatch-email",
+  Deno.env.get("SUPABASE_URL"),
+).href;
+
+Deno.serve((request) =>
+  handleSubmitForm(request, {
+    allowedOrigins: () => readAllowedOrigins(supabase),
+    loadVersion: async (formId, version) => {
+      const { data, error } = await supabase
+        .rpc("submission_form", { form: formId, version })
+        .maybeSingle<{
+          schema: unknown;
+          access_type: SubmittedForm["accessType"];
+        }>();
+      if (error) throw error;
+      return data === null
+        ? null
+        : { schema: data.schema, accessType: data.access_type };
+    },
+    queue: async ({ submissionId, formId, version }) => {
+      const { data, error } = await supabase.rpc("queue_submission", {
+        submission: submissionId,
+        form: formId,
+        version,
+      });
+      if (error) throw error;
+      return data === true;
+    },
+    unqueue: async (submissionId) => {
+      const { error } = await supabase.rpc("unqueue_submission", {
+        submission: submissionId,
+      });
+      if (error) throw error;
+    },
+    recordMessage: async (submissionId, messageId) => {
+      const { error } = await supabase.rpc("record_queued_message", {
+        submission: submissionId,
+        message: messageId,
+      });
+      if (error) throw error;
+    },
+    encrypt: (ids, payload) => encryptSubmission(keys, ids, payload),
+    publish: ({ body, deduplicationId, retries }) =>
+      qstash.publishJSON({ url: dispatchUrl, body, deduplicationId, retries }),
+  }),
+);

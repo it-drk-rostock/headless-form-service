@@ -19,7 +19,7 @@ npx supabase link --project-ref qhjysorczroizpgmagpp
 
 Each function is a thin `index.ts` that only calls `Deno.serve` and wires real dependencies into a portable `handler.ts`. The handler takes a `Request` plus injected dependencies and returns a `Response`, using Web-standard APIs only, so Vitest tests it in Node with in-memory fakes. See `supabase/functions/ping/` for the pattern.
 
-`npm test` runs every `*.test.ts` under `app/`, `embed/`, `lib/`, `supabase/functions/` and `supabase/tests/`. `npm run typecheck` covers everything except the Deno entry points.
+`npm test` runs every `*.test.ts` under `app/`, `embed/`, `lib/`, `supabase/functions/` and `supabase/tests/`. `npm run typecheck` covers everything except the Deno entry points and `supabase/functions/_shared/service.ts`, which they share.
 
 ## Dashboard
 
@@ -151,6 +151,29 @@ The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supab
 - Every served load adds one to `public.form_load_counts` for the form and the day (Europe/Berlin).
 - Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)` and read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
 
+### Submitting forms
+
+The embed sends a completed form with `POST /functions/v1/submit-form` (`supabase/functions/submit-form/`), as JSON `{ form_id, version, submission_id, answers }` (blueprint §4.2). The embed makes one `submission_id` per form load and sends it again on every retry.
+
+- The same allowed origins as `/load-form`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
+- Answers to keys that are not questions of that version are dropped (`lib/shared/answers.ts`).
+- The function writes a `queued` row to `public.form_stats` under the submission ID. The answers are stored nowhere. It encrypts `{ answers, pass_id }` with AES-256-GCM and publishes only the IDs and the ciphertext to QStash, with the submission ID as deduplication ID and 3 retries (ADR-0001). The ciphertext is bound to the submission, form and version, so it cannot be moved to another message.
+- If publishing fails, the row is removed and the answer is 503 `queue_unavailable`; the visitor can send again with the same ID. A submission ID whose message QStash has confirmed gets 202 without publishing again. One whose publish was never confirmed (say, the row could not be removed) is published again, and QStash's deduplication keeps that to one message.
+- The answer to an accepted submission is 202. The embed then shows SurveyJS's completion text, and otherwise a German error inside the form, which stays open for another try.
+- QStash delivers to `/functions/v1/dispatch-email`, which ticket 13 adds. Until it is deployed, QStash's deliveries fail, and after the retries the messages land in the dead-letter queue.
+
+The function needs two secrets, set once with the CLI (they are never in `.env*` files):
+
+```bash
+npx supabase secrets set QSTASH_TOKEN=<token from the Upstash console, EU region>
+```
+
+```bash
+npx supabase secrets set SUBMISSION_ENCRYPTION_KEYS=k1:<output of: openssl rand -base64 32>
+```
+
+`SUBMISSION_ENCRYPTION_KEYS` is a comma-separated list of `id:base64key`, each key 32 random bytes. The first key encrypts; all of them decrypt. To rotate, put a new key in front (`k2:<new>,k1:<old>`) and keep the old one for at least the 7 days QStash keeps dead-lettered messages (blueprint §4.5). Only the edge functions hold the keys. QStash's default URL is its EU region; `QSTASH_URL` overrides it, and must stay an EU one (ADR-0002).
+
 ### Embedding forms
 
 Editors paste this into a TYPO3 HTML content element (blueprint §6):
@@ -164,7 +187,7 @@ Editors paste this into a TYPO3 HTML content element (blueprint §6):
 
 - Several forms on one page each load and fail on their own. Pasting the whole snippet once per form is fine: every form is still shown once. Only elements on the page when it has loaded are filled in, not ones added later by scripts.
 - Instead of an empty box, visitors see a German message: while loading, for a form that does not exist or is not published (or an empty `data-form`), and when loading fails, which includes pages whose origin is not allowed and no answer within 15 seconds.
-- Submitting is not wired up yet (ticket 12). *Abschließen* keeps the form open and shows a notice that it cannot be sent yet.
+- *Abschließen* sends the answers through `/submit-form` (see *Submitting forms* above). Answers to questions the visitor hid again are cleared and not sent.
 - The form uses SurveyJS's default theme inside the TYPO3 page. Page CSS for bare `input` or `button` elements can still reach into it.
 
 For TYPO3 admins:
@@ -172,7 +195,7 @@ For TYPO3 admins:
 1. Add the site's origin to the allowed origins (see *Loading forms* above), e.g. `https://www.drk-rostock.de`. Without it, the form shows the loading error.
 2. If the site sends a Content-Security-Policy, it must allow:
    - `script-src https://<dashboard-domain>`, for `embed.js`;
-   - `connect-src https://qhjysorczroizpgmagpp.supabase.co`, for `/load-form` (and later `/submit-form`).
+   - `connect-src https://qhjysorczroizpgmagpp.supabase.co`, for `/load-form` and `/submit-form`.
 
    Nothing else: the theme is added as a constructed stylesheet, so `style-src` needs no `'unsafe-inline'`, and the form loads no fonts or images. Browsers without constructed stylesheets (before Safari 16.4) fall back to a `<style>` element, which a `style-src` without `'unsafe-inline'` blocks; the form then shows unstyled. Turnstile (ticket 15) will add `https://challenges.cloudflare.com` to `script-src` and `frame-src`.
 

@@ -1,4 +1,5 @@
 import type { LoadFailure } from "./load.ts";
+import type { SubmitFailure } from "./submit.ts";
 
 /**
  * The embed's fixed German texts (blueprint §1.2). Visitors read them on
@@ -10,7 +11,14 @@ export const messages = {
   pass_invalid: "Dieser Link ist ungültig oder abgelaufen.",
   failed:
     "Das Formular konnte nicht geladen werden. Bitte versuchen Sie es später erneut.",
-  // Until submissions are sent (ticket 12), so nobody believes theirs was.
-  submitUnavailable:
-    "Das Formular kann noch nicht abgeschickt werden. Bitte versuchen Sie es später erneut.",
-} satisfies Record<LoadFailure | "loading" | "submitUnavailable", string>;
+} satisfies Record<LoadFailure | "loading", string>;
+
+/** Shown inside the form while and after it is sent. */
+export const submitMessages = {
+  sending: "Ihre Angaben werden gesendet …",
+  not_found:
+    "Dieses Formular nimmt keine Einsendungen mehr an. Bitte laden Sie die Seite neu.",
+  pass_invalid: messages.pass_invalid,
+  failed:
+    "Ihre Angaben konnten nicht gesendet werden. Bitte versuchen Sie es in einem Moment erneut.",
+} satisfies Record<SubmitFailure | "sending", string>;

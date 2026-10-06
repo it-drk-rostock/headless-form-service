@@ -1,7 +1,7 @@
 // `/load-form` (blueprint §4.1, ADR-0004): the embed's only way to get a
 // form. Serves the current version of a published, not archived form to
 // pages on the allowed origins, and counts each load.
-import { jsonResponse } from "../../../lib/shared/http.ts";
+import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
 import {
   allowedMethods,
@@ -75,17 +75,5 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
     version: form.version,
     schema: form.schema,
     access_type: form.accessType,
-  });
-}
-
-/** JSON that is never cached: the current version and the counts change. */
-function reply(
-  body: unknown,
-  status = 200,
-  headers: Record<string, string> = {},
-): Response {
-  return jsonResponse(body, {
-    status,
-    headers: { "cache-control": "no-store", ...headers },
   });
 }

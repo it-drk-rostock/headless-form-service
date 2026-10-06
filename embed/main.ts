@@ -7,13 +7,15 @@ import { Model, surveyLocalization } from "survey-core";
 import surveyCss from "survey-core/survey-core.min.css";
 import { Survey } from "survey-react-ui";
 import { loadForm } from "./load.ts";
-import { messages } from "./messages.ts";
+import { messages, submitMessages } from "./messages.ts";
+import { newSubmissionId, submitForm } from "./submit.ts";
 
 // Set by the bundler from NEXT_PUBLIC_SUPABASE_URL.
 declare const __LOAD_FORM_URL__: string;
+declare const __SUBMIT_FORM_URL__: string;
 
-/** How long a visitor waits for `/load-form` before the error shows. */
-const LOAD_TIMEOUT_MS = 15_000;
+/** How long a visitor waits for `/load-form` or `/submit-form`. */
+const REQUEST_TIMEOUT_MS = 15_000;
 
 const EMBED_CSS = `
 .hfs-embed-message { margin: 0; padding: 1em; border: 1px solid #c8c8c8; border-radius: 4px; }
@@ -68,16 +70,10 @@ function addStyles(): void {
 async function mount(element: HTMLElement): Promise<void> {
   showMessage(element, messages.loading, "status");
 
-  const result = await loadForm(element.dataset.form ?? "", {
+  const formId = element.dataset.form ?? "";
+  const result = await loadForm(formId, {
     endpoint: __LOAD_FORM_URL__,
-    // Older browsers (Safari before 16) lack the timeout and just wait.
-    fetch: (url) =>
-      fetch(url, {
-        signal:
-          typeof AbortSignal.timeout === "function"
-            ? AbortSignal.timeout(LOAD_TIMEOUT_MS)
-            : undefined,
-      }),
+    fetch: (url) => fetch(url, { signal: timeout() }),
   });
   if (result.kind === "error") {
     showMessage(element, messages[result.reason], "alert");
@@ -86,10 +82,9 @@ async function mount(element: HTMLElement): Promise<void> {
 
   try {
     const model = new Model(result.schema);
-    model.onCompleting.add((_, options) => {
-      options.allow = false;
-      model.notify(messages.submitUnavailable, "error");
-    });
+    // Answers to questions a visitor hid again are not sent.
+    model.clearInvisibleValues = "onHidden";
+    sendOnComplete(model, formId, result.version);
 
     element.replaceChildren();
     const root = createRoot(element, {
@@ -104,6 +99,50 @@ async function mount(element: HTMLElement): Promise<void> {
   } catch {
     showMessage(element, messages.failed, "alert");
   }
+}
+
+/**
+ * Sends the answers when the visitor completes the form. The form stays open
+ * until `/submit-form` accepts them, then shows its completion text; on an
+ * error it shows a German message, and *Abschließen* tries again with the
+ * same submission ID, so a retry is never a second submission.
+ */
+function sendOnComplete(model: Model, formId: string, version: number): void {
+  const submissionId = newSubmissionId();
+  let sending = false;
+  let accepted = false;
+
+  model.onCompleting.add((_, options) => {
+    // The completion that follows acceptance, started below.
+    if (accepted) return;
+    options.allow = false;
+    if (sending) return;
+
+    sending = true;
+    model.notify(submitMessages.sending, "info");
+    void submitForm(
+      { formId, version, submissionId, answers: model.data },
+      {
+        endpoint: __SUBMIT_FORM_URL__,
+        fetch: (url, init) => fetch(url, { ...init, signal: timeout() }),
+      },
+    ).then((outcome) => {
+      sending = false;
+      if (outcome.kind === "accepted") {
+        accepted = true;
+        model.doComplete();
+      } else {
+        model.notify(submitMessages[outcome.reason], "error");
+      }
+    });
+  });
+}
+
+/** Older browsers (Safari before 16) lack the timeout and just wait. */
+function timeout(): AbortSignal | undefined {
+  return typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+    : undefined;
 }
 
 function showMessage(

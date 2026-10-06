@@ -404,6 +404,11 @@ verify_jwt = false
 # the origin itself and reads with the secret key the runtime injects.
 verify_jwt = false
 
+[functions.submit-form]
+# Public by design (ADR-0004), like load-form: the embed sends submissions
+# without any key. It checks the origin itself.
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

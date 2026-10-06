@@ -1,4 +1,5 @@
 import type { MessageKey } from "../i18n/index.ts";
+import { isObject } from "../shared/object.ts";
 import { type ProfileNameRow, profileName } from "../shared/profile.ts";
 
 /**
@@ -44,10 +45,6 @@ export function draftSchemaProblem(schema: unknown): MessageKey | null {
   if (!isObject(schema)) return "forms.errorDraftInvalid";
   if (hasDisabledQuestion(schema)) return "forms.errorDraftQuestionType";
   return null;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // Like the database constraint: any `type` anywhere, ignoring case.
