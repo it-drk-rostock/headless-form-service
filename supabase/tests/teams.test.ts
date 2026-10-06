@@ -300,4 +300,26 @@ describe("manual RLS checklist", () => {
       to authenticated using (true)`);
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 30 failed/);
   });
+
+  it("catches any table the anon role can read", async () => {
+    await db.exec("grant select on public.form_load_counts to anon");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
+  });
+
+  it("catches a column the anon role can read", async () => {
+    await db.exec("grant select (allowed_origins) on public.settings to anon");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
+  });
+
+  it("catches anon loading forms", async () => {
+    await db.exec("grant execute on function public.load_form(uuid) to anon");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
+  });
+
+  it("catches anon counting form loads", async () => {
+    await db.exec(
+      "grant execute on function public.count_form_load(uuid) to anon",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
+  });
 });

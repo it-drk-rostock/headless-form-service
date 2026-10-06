@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft and publishing (tickets 04-09). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing and loading forms (tickets 04-10). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 31 of 31 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 32 of 32 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -437,11 +437,38 @@ begin
     raise exception 'RLS check 9 failed: anon can publish forms';
   exception when insufficient_privilege then null;
   end;
+
+  -- 32. The anon role has no privilege on any table, view or sequence of
+  -- ours, and cannot call what /load-form calls (ADR-0004).
+  if exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname in ('public', 'private')
+      and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S')
+      and case when c.relkind = 'S'
+        then has_sequence_privilege('anon', c.oid, 'usage, select, update')
+        else has_table_privilege('anon', c.oid,
+               'select, insert, update, delete, truncate, references, trigger')
+             or has_any_column_privilege('anon', c.oid,
+               'select, insert, update, references')
+      end
+  ) then
+    raise exception 'RLS check 32 failed: anon has a privilege on a table, view or sequence';
+  end if;
+  -- Asked of the grants, not by calling: load_form runs as its caller, so a
+  -- call would fail on the tables even with a stray grant.
+  if has_function_privilege('anon', 'public.load_form(uuid)', 'execute') then
+    raise exception 'RLS check 32 failed: anon can call load_form';
+  end if;
+  if has_function_privilege('anon', 'public.count_form_load(uuid)', 'execute') then
+    raise exception 'RLS check 32 failed: anon can call count_form_load';
+  end if;
 end $$;
 
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 31 of 31 checks' as result;
+select 'RLS checklist passed: 32 of 32 checks' as result;
 
 rollback;

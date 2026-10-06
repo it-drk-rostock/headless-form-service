@@ -142,6 +142,15 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 - A new form's draft starts with the default email template: Standard Layout, a greeting and `{{answers_table}}`.
 - Publishing is part of `supabase/snippets/rls-checklist-teams.sql` (checks 28–31, plus 9).
 
+### Loading forms
+
+The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).
+
+- Only pages on `public.settings.allowed_origins` may call it. Other origins, and requests without an `Origin` header, get 403 before the form is looked at. The list is read on every request. Until the settings page exists (ticket 20), change it in the SQL editor: `update public.settings set allowed_origins = array['http://localhost:3000', 'https://www.drk-rostock.de'];`. Origins must match exactly, as the browser sends them: scheme, host and any port, without a trailing slash.
+- An unknown, never published or archived form gets 404. A protected form gets 403 without its questions, until form passes are checked (ticket 26).
+- Every served load adds one to `public.form_load_counts` for the form and the day (Europe/Berlin).
+- Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)` and read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
+
 ### Deploy to Cloudflare
 
 The dashboard runs as a Cloudflare Worker built with OpenNext (`wrangler.jsonc`, `open-next.config.ts`). Log in once per machine with `npx wrangler login`, then:
