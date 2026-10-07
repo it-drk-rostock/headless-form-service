@@ -195,7 +195,7 @@ A protected form is filled in only with a form pass: a secret in the link `<form
 - *Widerrufen* on a valid pass goes through `public.revoke_form_pass(pass)`. Revoking cannot be undone.
 - `public.form_passes` keeps the hash, use limit, use count, expiry, revocation time, source (`dashboard` or `n8n`), creator and metadata. Members of the form's team and Super Admins read every column but `token_hash` and write only through the two functions, which are open to the same people. Passes go with their form when it is deleted for good.
 - A database trigger writes `form_pass.created` (use limit, expiry, source; no hash or metadata) and `form_pass.revoked` (*Pass angelegt* / *Pass widerrufen*).
-- `/load-form` and `/submit-form` do not check passes yet: a protected form gets 403 until ticket 26.
+- `/load-form` checks the pass without consuming it. `/submit-form` still refuses protected submissions until pass claiming is implemented (ticket 27).
 - Checks 43–44 of `supabase/snippets/rls-checklist-teams.sql` cover it, plus 9.
 
 ### Loading forms
@@ -204,7 +204,7 @@ The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supab
 
 - Only pages on `public.settings.allowed_origins` may call it. Other origins, and requests without an `Origin` header, get 403 before the form is looked at. The list is read on every request, so a change applies at once. Super Admins change it on `/settings` (see *Global settings* below). Origins must match exactly, as the browser sends them: scheme, host and any port, without a trailing slash.
 - More than `settings.load_rate_limit` requests per minute from one IP get 429 `rate_limited` (see *Rate limiting* below).
-- An unknown, never published or archived form gets 404. A closed form gets `{ state: "closed" }` (see *Closing forms* above). A protected form gets 403 without its questions, until form passes are checked (ticket 26).
+- An unknown, never published or archived form gets 404. A closed form gets `{ state: "closed" }` (see *Closing forms* above). A protected form requires `form_pass` in the query: the function hashes the secret with SHA-256 and looks up a pass for this form. Missing, unknown, wrong-form, revoked, expired or used-up passes get 403 `form_pass_invalid` without questions. A valid pass returns the current version and counts the load, without increasing the pass's use count.
 - Every served load adds one to `public.form_load_counts` for the form and the day (Europe/Berlin).
 - Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)`. Besides it, only Super Admins can read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
 
@@ -300,6 +300,7 @@ Editors paste this into a TYPO3 HTML content element (blueprint §6):
 `embed.js` shows the current version of each `data-form` element's form on the page. It is built from `embed/` (`main.ts` is the entry point) into `public/embed.js`, a single classic script that bundles the SurveyJS form library (with React), its default theme and German texts. `npm run build:embed` builds it, and `npm run dev` and `npm run build` (so also `preview` and `deploy`) run that first. It needs `NEXT_PUBLIC_SUPABASE_URL` at build time, from the environment or `.env.local`, and Node 22.18 or later; the `/load-form` address is compiled in. The built file is not committed. Browsers cache it for 5 minutes (`public/_headers`), so a deploy reaches TYPO3 pages without any change there.
 
 - Several forms on one page each load and fail on their own. Pasting the whole snippet once per form is fine: every form is still shown once. Only elements on the page when it has loaded are filled in, not ones added later by scripts.
+- The embed reads `form_pass` from the hosting page's query string and forwards it to `/load-form`. An invalid or missing pass for a protected form shows *Dieser Link ist ungültig oder abgelaufen.* and no questions. Public forms need no pass.
 - Instead of an empty box, visitors see a German message: while loading, for a form that does not exist or is not published (or an empty `data-form`), and when loading fails, which includes pages whose origin is not allowed and no answer within 15 seconds.
 - *Abschließen* sends the answers through `/submit-form` (see *Submitting forms* above). Answers to questions the visitor hid again are cleared and not sent.
 - The form uses SurveyJS's default theme inside the TYPO3 page. Page CSS for bare `input` or `button` elements can still reach into it.

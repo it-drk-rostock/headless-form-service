@@ -1,6 +1,7 @@
 // Asks `/load-form` (blueprint §4.1) for a form's current version and sorts
 // every answer into something the embed can show. Web-standard APIs only, so
 // Vitest tests it in Node with a fake `fetch`.
+import { FORM_PASS_PARAM } from "../lib/shared/form-pass.ts";
 
 export type LoadFailure =
   | "not_found"
@@ -23,20 +24,25 @@ export type LoadResult =
 export type LoadDeps = {
   /** `/functions/v1/load-form` of the Supabase project. */
   endpoint: string;
+  /** The hosting page's URL, from window.location.href. */
+  pageUrl?: string;
   fetch: (input: string) => Promise<Response>;
 };
 
 export async function loadForm(
   formId: string,
-  { endpoint, fetch }: LoadDeps,
+  { endpoint, fetch, pageUrl }: LoadDeps,
 ): Promise<LoadResult> {
   // An empty `data-form` can only be a pasting mistake; asking would get 400.
   if (formId.trim() === "") return failure("not_found");
 
   try {
-    const response = await fetch(
-      `${endpoint}?${new URLSearchParams({ form_id: formId })}`,
-    );
+    const params = new URLSearchParams({ form_id: formId });
+    const secret = pageUrl
+      ? new URL(pageUrl).searchParams.get(FORM_PASS_PARAM)
+      : null;
+    if (secret) params.set(FORM_PASS_PARAM, secret);
+    const response = await fetch(`${endpoint}?${params}`);
     if (response.status === 404) return failure("not_found");
     if (response.status === 429) return failure("rate_limited");
 

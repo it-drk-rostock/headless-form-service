@@ -5,7 +5,11 @@ import {
   createServiceClient,
   readEndpointSettings,
 } from "../_shared/service.ts";
-import { handleLoadForm, type LoadedForm } from "./handler.ts";
+import {
+  handleLoadForm,
+  type LoadedForm,
+  type LoadedFormPass,
+} from "./handler.ts";
 
 const supabase = createServiceClient("load-form");
 const withinRateLimit = createRateLimiter("load-form");
@@ -21,6 +25,17 @@ Deno.serve((request) =>
   handleLoadForm(request, {
     settings: () => readEndpointSettings(supabase, "load"),
     withinRateLimit,
+    now: Date.now,
+    loadPass: async (formId, tokenHash) => {
+      const { data, error } = await supabase
+        .from("form_passes")
+        .select("max_uses, use_count, expires_at, revoked_at")
+        .eq("form_id", formId)
+        .eq("token_hash", tokenHash)
+        .maybeSingle<LoadedFormPass>();
+      if (error) throw error;
+      return data;
+    },
     loadForm: async (formId) => {
       const { data, error } = await supabase
         .rpc("load_form", { form: formId })

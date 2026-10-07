@@ -2,6 +2,11 @@
 // form. Serves the current version of a published, not archived form to
 // pages on the allowed origins, and counts each load. A closed form gets
 // only its closed state, so the embed shows the closed notice.
+
+import {
+  FORM_PASS_PARAM,
+  hashFormPassSecret,
+} from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
 import { allowedMethods, withCorsHeaders } from "../_shared/cors.ts";
@@ -28,10 +33,24 @@ export type LoadFormDeps = {
   withinRateLimit: RateLimiter;
   /** Null for an unknown, unpublished or archived form. */
   loadForm: (formId: string) => Promise<LoadedForm | null>;
+  /** Read-only lookup, scoped to this form and the secret's SHA-256 hash. */
+  loadPass: (
+    formId: string,
+    tokenHash: string,
+  ) => Promise<LoadedFormPass | null>;
+  now: () => number;
   /** Adds one to today's load count of the form. */
   countLoad: (formId: string) => Promise<void>;
   /** Cloudflare's public key for the widget, handed out per form. */
   turnstileSiteKey: string;
+};
+
+/** Only the fields needed to validate a pass; no secret or metadata. */
+export type LoadedFormPass = {
+  max_uses: number | null;
+  use_count: number;
+  expires_at: string | null;
+  revoked_at: string | null;
 };
 
 const METHODS = ["GET"];
@@ -69,7 +88,8 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
     });
   }
 
-  const formId = new URL(request.url).searchParams.get("form_id");
+  const params = new URL(request.url).searchParams;
+  const formId = params.get("form_id");
   if (!formId) return reply({ error: "form_id_missing" }, 400);
 
   const form = isUuid(formId) ? await deps.loadForm(formId) : null;
@@ -79,10 +99,20 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
   // anyway, so there is nothing to protect. Not counted as a load.
   if (form.isClosed) return reply({ state: "closed" });
 
-  // Protected forms need a valid form pass, which ticket 26 checks. Until
-  // then their questions are never handed out (ADR-0004).
   if (form.accessType === "protected") {
-    return reply({ error: "form_pass_invalid" }, 403);
+    const secret = params.get(FORM_PASS_PARAM);
+    const pass = secret
+      ? await deps.loadPass(formId, await hashFormPassSecret(secret))
+      : null;
+    if (
+      pass === null ||
+      pass.revoked_at !== null ||
+      (pass.expires_at !== null &&
+        !(Date.parse(pass.expires_at) > deps.now())) ||
+      (pass.max_uses !== null && pass.use_count >= pass.max_uses)
+    ) {
+      return reply({ error: "form_pass_invalid" }, 403);
+    }
   }
 
   // The count is only for statistics, so a failure there must not keep the

@@ -24,6 +24,42 @@ const json = (body: unknown, status = 200) =>
   });
 
 describe("loadForm", () => {
+  it.each([
+    "https://www.drk-rostock.de/form?campaign=1",
+    "https://www.drk-rostock.de/form?form_pass=",
+    "https://www.drk-rostock.de/form#form_pass=secret",
+  ])("does not send a pass absent from the page's query: %s", async (pageUrl) => {
+    const { fetch, requested } = fakeFetch(() =>
+      json({ error: "form_pass_invalid" }, 403),
+    );
+
+    expect(
+      await loadForm(FORM, { endpoint: ENDPOINT, fetch, pageUrl }),
+    ).toEqual({
+      kind: "error",
+      reason: "pass_invalid",
+    });
+    expect(requested).toEqual([`${ENDPOINT}?form_id=${FORM}`]);
+  });
+
+  it("reads and forwards the pass from the form page URL", async () => {
+    const { fetch, requested } = fakeFetch(() =>
+      json({ version: 3, schema: SCHEMA, access_type: "protected" }),
+    );
+
+    const result = await loadForm(FORM, {
+      endpoint: ENDPOINT,
+      fetch,
+      pageUrl:
+        "https://www.drk-rostock.de/form?campaign=1&form_pass=a%2Bb%26c%3Dd#info",
+    });
+
+    expect(result.kind).toBe("ready");
+    expect(requested).toEqual([
+      `${ENDPOINT}?form_id=${FORM}&form_pass=a%2Bb%26c%3Dd`,
+    ]);
+  });
+
   it("asks /load-form for the form and returns its current version", async () => {
     const { fetch, requested } = fakeFetch(() =>
       json({ version: 3, schema: SCHEMA, access_type: "public" }),

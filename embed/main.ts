@@ -75,6 +75,7 @@ async function mount(element: HTMLElement): Promise<void> {
   const formId = element.dataset.form ?? "";
   const result = await loadForm(formId, {
     endpoint: __LOAD_FORM_URL__,
+    pageUrl: window.location.href,
     fetch: (url) => fetch(url, { signal: timeout() }),
   });
   if (result.kind === "error") {

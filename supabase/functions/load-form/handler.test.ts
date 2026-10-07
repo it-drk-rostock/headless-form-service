@@ -3,12 +3,17 @@ import type { RateLimit } from "../_shared/rate-limit.ts";
 import {
   handleLoadForm,
   type LoadedForm,
+  type LoadedFormPass,
   type LoadFormDeps,
 } from "./handler.ts";
 
 const ORIGIN = "https://www.drk-rostock.de";
 const FORM = "3f6c1a52-8d0e-4b7a-9c1d-2e5f8a9b0c1d";
 const SITE_KEY = "0x4AAAAAAAtestsitekey";
+const PASS = "test";
+const PASS_HASH =
+  "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+const NOW = Date.parse("2026-10-07T12:00:00Z");
 const SCHEMA = {
   pages: [{ name: "seite1", elements: [{ type: "text", name: "vorname" }] }],
 };
@@ -27,6 +32,15 @@ function fakes(
       isClosed: false,
     },
   },
+  passes: Record<string, LoadedFormPass & { form_id: string }> = {
+    [PASS_HASH]: {
+      form_id: FORM,
+      max_uses: 1,
+      use_count: 0,
+      expires_at: null,
+      revoked_at: null,
+    },
+  },
 ) {
   const counted: string[] = [];
   const hits = new Map<string, number>();
@@ -38,12 +52,15 @@ function fakes(
       return count <= requests;
     },
     loadForm: async (id) => forms[id] ?? null,
+    loadPass: async (formId, hash) =>
+      passes[hash]?.form_id === formId ? passes[hash] : null,
+    now: () => NOW,
     countLoad: async (id) => {
       counted.push(id);
     },
     turnstileSiteKey: SITE_KEY,
   };
-  return { deps, counted, hits };
+  return { deps, counted, hits, passes };
 }
 
 const get = (
@@ -61,6 +78,131 @@ const get = (
 };
 
 describe("handleLoadForm", () => {
+  it("serves and counts repeated loads with a valid single-use pass without consuming it", async () => {
+    const { deps, counted, passes } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: true,
+        isClosed: false,
+      },
+    });
+
+    for (let i = 0; i < 2; i++) {
+      const response = await handleLoadForm(
+        get(`?form_id=${FORM}&form_pass=${PASS}`),
+        deps,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        version: 3,
+        schema: SCHEMA,
+        access_type: "protected",
+        turnstile_site_key: SITE_KEY,
+      });
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    }
+    expect(counted).toEqual([FORM, FORM]);
+    expect(passes[PASS_HASH].use_count).toBe(0);
+  });
+
+  it.each([
+    ["missing", "", {}],
+    ["empty", "&form_pass=", {}],
+    ["unknown", "&form_pass=unknown", {}],
+    ["a hash instead of the secret", `&form_pass=${PASS_HASH}`, {}],
+    [
+      "for another form",
+      `&form_pass=${PASS}`,
+      { form_id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d" },
+    ],
+    ["revoked", `&form_pass=${PASS}`, { revoked_at: "2026-10-07T11:00:00Z" }],
+    ["expired", `&form_pass=${PASS}`, { expires_at: "2026-10-07T11:59:59Z" }],
+    [
+      "expiring now",
+      `&form_pass=${PASS}`,
+      { expires_at: "2026-10-07T12:00:00Z" },
+    ],
+    ["used up", `&form_pass=${PASS}`, { use_count: 1 }],
+  ])("rejects a pass that is %s without questions or a counted load", async (_, query, changes) => {
+    const { deps, counted, passes } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: true,
+        isClosed: false,
+      },
+    });
+    Object.assign(passes[PASS_HASH], changes);
+
+    const response = await handleLoadForm(
+      get(`?form_id=${FORM}${query}`),
+      deps,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "form_pass_invalid" });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(counted).toEqual([]);
+  });
+
+  it.each([
+    ["unlimited", { max_uses: null, use_count: 100 }],
+    ["with uses left", { max_uses: 3, use_count: 2 }],
+    ["not expired", { expires_at: "2026-10-07T12:00:01Z" }],
+  ])("serves a protected form with a pass that is %s", async (_, changes) => {
+    const { deps, passes } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: false,
+        isClosed: false,
+      },
+    });
+    Object.assign(passes[PASS_HASH], changes);
+
+    const response = await handleLoadForm(
+      get(`?form_id=${FORM}&form_pass=${PASS}`),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      version: 3,
+      schema: SCHEMA,
+      access_type: "protected",
+    });
+  });
+
+  it("fails closed when the pass lookup fails", async () => {
+    const { deps, counted } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: false,
+        isClosed: false,
+      },
+    });
+    deps.loadPass = async () => {
+      throw new Error("connection refused");
+    };
+
+    const response = await handleLoadForm(
+      get(`?form_id=${FORM}&form_pass=${PASS}`),
+      deps,
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "internal_error" });
+    expect(counted).toEqual([]);
+  });
+
   it("serves the current version's number, questions and access type", async () => {
     const { deps } = fakes();
 
