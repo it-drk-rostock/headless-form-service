@@ -150,6 +150,21 @@ describe("handleLoadForm", () => {
     );
   });
 
+  it("reads the load limit on every request", async () => {
+    const { deps } = fakes();
+    let rateLimit = 1;
+    deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit });
+
+    await handleLoadForm(get(`?form_id=${FORM}`), deps);
+    expect((await handleLoadForm(get(`?form_id=${FORM}`), deps)).status).toBe(
+      429,
+    );
+    rateLimit = 5;
+    expect((await handleLoadForm(get(`?form_id=${FORM}`), deps)).status).toBe(
+      200,
+    );
+  });
+
   it("answers 429 with CORS headers once an IP is over the load limit, without loading or counting", async () => {
     const { deps, counted } = fakes();
     deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 2 });

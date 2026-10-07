@@ -1,16 +1,18 @@
 import { type MessageKey, t } from "../../lib/i18n/index.ts";
 import type { TeamSummary } from "../../lib/teams/types.ts";
 
-export type ModuleId = "forms" | "teams" | "audit";
+export type ModuleId = "forms" | "teams" | "audit" | "settings";
 
 export type DashboardModule = {
   id: ModuleId;
   href: `/${string}`;
   label: MessageKey;
   superAdminOnly?: true;
+  /** Sits at the foot of the rail, above the avatar (ui-design §4). */
+  atBottom?: true;
 };
 
-/** Modules in rail order. Settings (Super Admin) joins with ticket 20. */
+/** Modules in rail order. */
 export const modules: readonly DashboardModule[] = [
   { id: "forms", href: "/forms", label: "nav.forms" },
   { id: "teams", href: "/teams", label: "nav.teams" },
@@ -19,6 +21,13 @@ export const modules: readonly DashboardModule[] = [
     href: "/audit-log",
     label: "nav.auditLog",
     superAdminOnly: true,
+  },
+  {
+    id: "settings",
+    href: "/settings",
+    label: "nav.settings",
+    superAdminOnly: true,
+    atBottom: true,
   },
 ];
 

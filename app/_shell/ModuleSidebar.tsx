@@ -16,6 +16,7 @@ import {
   IconFiles,
   IconHistory,
   IconLayoutSidebarLeftCollapse,
+  IconSettings,
   IconUsers,
   IconUsersGroup,
 } from "@tabler/icons-react";
@@ -59,7 +60,15 @@ export function ModuleSidebar({
         </ActionIcon>
       </Group>
       <Box p="xs">
-        {activeId === "audit" ? (
+        {activeId === "settings" ? (
+          <SidebarItem
+            href="/settings"
+            label={t("nav.generalSettings")}
+            icon={<IconSettings size={16} stroke={1.5} />}
+            pathname={pathname}
+            onClick={onNavigate}
+          />
+        ) : activeId === "audit" ? (
           <SidebarItem
             href="/audit-log"
             label={t("nav.allAuditEntries")}

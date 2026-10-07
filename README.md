@@ -124,6 +124,16 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 - `details` holds readable context, such as the member's address and role. It never holds submission data.
 - The audit log is part of `supabase/snippets/rls-checklist-teams.sql` (checks 16–19, and 9 for anon).
 
+### Global settings
+
+Super Admins change the allowed origins and both rate limits on `/settings` (rail icon *Einstellungen*, bottom). Everyone else gets "not found". `/load-form` and `/submit-form` read the `public.settings` row on every request, so a saved change applies to the next request, without a redeploy.
+
+- **Allowed origins:** one per line, or separated by commas, semicolons or spaces. The dashboard stores each as browsers send it (lower case, without a default port or trailing slash, international domains in ASCII), each once, at most 100. Paths, wildcards, credentials and IPv6 addresses are refused. An empty list means no site can embed forms.
+- **Rate limits:** whole numbers from 1 to 100 000. Loads count per minute and IP, submissions per hour and IP.
+- The database checks the same rules (`settings_*_check`). RLS lets only Super Admins read and update the row, and only those three columns. Nobody adds or deletes the row through the Data API.
+- Each changed setting is recorded in the audit log (`settings.origins_changed`, `settings.load_limit_changed`, `settings.submit_limit_changed`, with old and new value). The entries belong to no team, so only Super Admins see them, on `/audit-log`.
+- The settings are part of `supabase/snippets/rls-checklist-teams.sql` (checks 33 and 34).
+
 ### Forms
 
 `public.forms` holds each team's forms: settings that take effect at once (name, recipients, and later closed, archived and the rest), plus the single draft. Any member of the owning team, and every Super Admin, can create a form and change its name, recipients and bot protection (see *Bot protection* below). `/forms` lists the forms of all your teams, without archived ones. `/forms/[id]` shows a form's settings.
@@ -146,11 +156,11 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 
 The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version, plus `turnstile_site_key` when the form has Turnstile on. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).
 
-- Only pages on `public.settings.allowed_origins` may call it. Other origins, and requests without an `Origin` header, get 403 before the form is looked at. The list is read on every request. Until the settings page exists (ticket 20), change it in the SQL editor: `update public.settings set allowed_origins = array['http://localhost:3000', 'https://www.drk-rostock.de'];`. Origins must match exactly, as the browser sends them: scheme, host and any port, without a trailing slash.
+- Only pages on `public.settings.allowed_origins` may call it. Other origins, and requests without an `Origin` header, get 403 before the form is looked at. The list is read on every request, so a change applies at once. Super Admins change it on `/settings` (see *Global settings* below). Origins must match exactly, as the browser sends them: scheme, host and any port, without a trailing slash.
 - More than `settings.load_rate_limit` requests per minute from one IP get 429 `rate_limited` (see *Rate limiting* below).
 - An unknown, never published or archived form gets 404. A protected form gets 403 without its questions, until form passes are checked (ticket 26).
 - Every served load adds one to `public.form_load_counts` for the form and the day (Europe/Berlin).
-- Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)` and read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
+- Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)`. Besides it, only Super Admins can read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
 
 ### Submitting forms
 
@@ -180,7 +190,7 @@ npx supabase secrets set SUBMISSION_ENCRYPTION_KEYS=k1:<output of: openssl rand 
 
 `/load-form` and `/submit-form` limit each IP with a sliding window in Upstash Redis (EU, ADR-0002), right after the origin check (blueprint §4.1, §4.2). Redis is used for nothing else.
 
-- The limits are `public.settings.load_rate_limit` (default 60 per minute and IP) and `submit_rate_limit` (default 3 per hour and IP), read on every request. The windows are fixed in the handlers. Until the settings page exists (ticket 20), change the numbers in the SQL editor: `update public.settings set submit_rate_limit = 5;`.
+- The limits are `public.settings.load_rate_limit` (default 60 per minute and IP) and `submit_rate_limit` (default 3 per hour and IP), read on every request. The windows are fixed in the handlers. Super Admins change the numbers on `/settings`.
 - Every request to `/submit-form` counts, also a retry of the same submission after an error.
 - Over the limit, the answer is 429 `rate_limited`, with CORS headers. The embed then shows *Zu viele Versuche …* when loading and *Zu viele Einsendungen …* when sending; the form stays open.
 - The IP is the first address in `x-forwarded-for`, which Supabase's edge sets. Loads and submissions count separately (key prefixes `ratelimit:load-form` and `ratelimit:submit-form`). Preflights and refused origins don't count.

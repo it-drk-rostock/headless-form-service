@@ -13,6 +13,10 @@ describe("activeModule", () => {
     expect(activeModule("/audit-log")?.id).toBe("audit");
   });
 
+  it("finds the settings", () => {
+    expect(activeModule("/settings")?.id).toBe("settings");
+  });
+
   it("does not match a path that only shares a prefix", () => {
     expect(activeModule("/formsx")).toBeUndefined();
   });
@@ -48,12 +52,21 @@ describe("breadcrumbs", () => {
 });
 
 describe("visibleModules", () => {
-  it("shows the audit log to Super Admins only", () => {
+  it("shows the audit log and the settings to Super Admins only", () => {
     expect(visibleModules(true).map((m) => m.id)).toEqual([
       "forms",
       "teams",
       "audit",
+      "settings",
     ]);
     expect(visibleModules(false).map((m) => m.id)).toEqual(["forms", "teams"]);
+  });
+
+  it("puts the settings at the bottom of the rail", () => {
+    expect(
+      visibleModules(true)
+        .filter((m) => m.atBottom)
+        .map((m) => m.id),
+    ).toEqual(["settings"]);
   });
 });

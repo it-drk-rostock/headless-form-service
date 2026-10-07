@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing and loading forms (tickets 04-10). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms and the global settings (tickets 04-10, 20). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 32 of 32 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 34 of 34 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -356,6 +356,16 @@ begin
     raise exception 'RLS check 24 failed: the Team Admin deleted a form';
   exception when insufficient_privilege then null;
   end;
+
+  -- 33. Only Super Admins see and change the global settings.
+  if exists (select 1 from public.settings) then
+    raise exception 'RLS check 33 failed: the Team Admin sees the settings';
+  end if;
+  update public.settings set allowed_origins = '{https://rls-check.example.invalid}';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 33 failed: the Team Admin changed the allowed origins';
+  end if;
 end $$;
 
 -- As the Super Admin (member of no team) --------------------------------------
@@ -404,6 +414,19 @@ begin
   if (select count(*) from public.forms where id in (
         '00000000-0000-4000-8000-0000000000f1', '00000000-0000-4000-8000-0000000000f2')) <> 2 then
     raise exception 'RLS check 25 failed: the Super Admin does not see every team''s forms';
+  end if;
+
+  -- 34. A Super Admin changes the global settings, and the change is in
+  -- the audit log.
+  update public.settings set load_rate_limit = load_rate_limit + 1;
+  get diagnostics changed = row_count;
+  if changed <> 1 then
+    raise exception 'RLS check 34 failed: the Super Admin could not change the settings';
+  end if;
+  if not exists (select 1 from public.audit_log
+                 where action = 'settings.load_limit_changed'
+                   and actor_id = '00000000-0000-4000-8000-00000000c001') then
+    raise exception 'RLS check 34 failed: the settings change is not in the audit log';
   end if;
 end $$;
 
@@ -487,6 +510,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 32 of 32 checks' as result;
+select 'RLS checklist passed: 34 of 34 checks' as result;
 
 rollback;

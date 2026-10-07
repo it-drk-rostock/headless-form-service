@@ -8,6 +8,8 @@ export const de = {
   "nav.forms": "Formulare",
   "nav.teams": "Teams",
   "nav.auditLog": "Audit-Log",
+  "nav.settings": "Einstellungen",
+  "nav.generalSettings": "Allgemein",
   "nav.allAuditEntries": "Alle Einträge",
   "nav.allForms": "Alle Formulare",
   "nav.allTeams": "Alle Teams",
@@ -228,6 +230,35 @@ export const de = {
   "forms.errorGeneric":
     "Das Formular konnte nicht gespeichert werden. Bitte erneut versuchen.",
 
+  "settings.title": "Einstellungen",
+  "settings.intro":
+    "Gelten für alle Formulare und wirken sofort, ohne neues Deployment. Nur Super Admins sehen und ändern sie; jede Änderung steht im Audit-Log.",
+  "settings.origins": "Erlaubte Websites",
+  "settings.originsHint":
+    "Nur Seiten dieser Adressen dürfen Formulare einbetten und absenden. Eine Adresse pro Zeile, mit https:// und ohne Pfad, z. B. https://www.drk-rostock.de. Höchstens {maxOrigins}.",
+  "settings.originsNone":
+    "Keine Website ist erlaubt. Eingebettete Formulare lassen sich nirgends laden.",
+  "settings.loadRateLimit": "Aufrufe pro Minute und IP-Adresse",
+  "settings.loadRateLimitHint":
+    "So oft darf eine IP-Adresse pro Minute ein Formular laden. Darüber erhält sie „Zu viele Versuche“.",
+  "settings.submitRateLimit": "Einsendungen pro Stunde und IP-Adresse",
+  "settings.submitRateLimitHint":
+    "So oft darf eine IP-Adresse pro Stunde absenden. Besucher hinter einer gemeinsamen IP-Adresse (z. B. ein Büronetz) teilen sich dieses Limit.",
+  "settings.save": "Speichern",
+  "settings.saved": "Gespeichert. Die Änderungen gelten ab sofort.",
+  "settings.errorOriginInvalid":
+    "„{origin}“ ist keine gültige Website-Adresse. Bitte nur http:// oder https://, den Domainnamen und optional einen Port angeben, ohne Pfad.",
+  "settings.errorTooManyOrigins":
+    "Höchstens {maxOrigins} erlaubte Websites sind möglich.",
+  "settings.errorLoadRateLimitInvalid":
+    "Bitte für die Aufrufe eine ganze Zahl von {min} bis {max} eingeben.",
+  "settings.errorSubmitRateLimitInvalid":
+    "Bitte für die Einsendungen eine ganze Zahl von {min} bis {max} eingeben.",
+  "settings.errorForbidden":
+    "Nur Super Admins dürfen die Einstellungen ändern.",
+  "settings.errorGeneric":
+    "Die Einstellungen konnten nicht gespeichert werden. Bitte erneut versuchen.",
+
   "teams.title": "Teams",
   "teams.emptyTitle": "Noch keine Teams",
   "teams.emptyHint": "Hier erscheinen alle Teams, denen man angehört.",
@@ -361,6 +392,11 @@ export const de = {
   "audit.summary.formSettingChanged": "{name}: {from} → {to}",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
+  "audit.action.settingsOriginsChanged": "Erlaubte Websites geändert",
+  "audit.action.settingsLoadLimitChanged": "Aufruf-Limit geändert",
+  "audit.action.settingsSubmitLimitChanged": "Einsende-Limit geändert",
+  "audit.summary.settingsLoadLimit": "{from} → {to} pro Minute und IP",
+  "audit.summary.settingsSubmitLimit": "{from} → {to} pro Stunde und IP",
   "audit.summary.none": "keine",
   "audit.newer": "Neuere",
   "audit.older": "Ältere",

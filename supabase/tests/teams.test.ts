@@ -301,6 +301,17 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 30 failed/);
   });
 
+  it("catches settings that leak to Team Admins", async () => {
+    await db.exec(`create policy "leak" on public.settings for select
+      to authenticated using (true)`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 33 failed/);
+  });
+
+  it("catches settings changes that are not recorded", async () => {
+    await db.exec("drop trigger settings_audit_change on public.settings");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 34 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);

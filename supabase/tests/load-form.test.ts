@@ -207,12 +207,14 @@ describe("settings", () => {
     ).rejects.toMatchObject({ code: "23505" });
   });
 
-  it("is hidden from visitors and signed-in people, and read-only for edge functions", async () => {
-    for (const who of ["anon", { userId: max }] as const) {
-      await expect(
-        queryAs(db, who, "select * from public.settings"),
-      ).rejects.toMatchObject({ code: "42501" });
-    }
+  // Super Admins read and change it on the settings page (settings.test.ts).
+  it("is hidden from visitors and other signed-in people, and read-only for edge functions", async () => {
+    await expect(
+      queryAs(db, "anon", "select * from public.settings"),
+    ).rejects.toMatchObject({ code: "42501" });
+    expect(
+      await queryAs(db, { userId: max }, "select * from public.settings"),
+    ).toEqual([]);
     await expect(
       commitAs(
         db,

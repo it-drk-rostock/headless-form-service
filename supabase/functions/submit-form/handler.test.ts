@@ -562,6 +562,21 @@ describe("handleSubmitForm", () => {
     expect(published).toEqual([]);
   });
 
+  it("reads the allowed origins and the submit limit on every request", async () => {
+    const { deps } = fakes();
+    let settings = { allowedOrigins: [ORIGIN], rateLimit: 1 };
+    deps.settings = async () => settings;
+    const another = () =>
+      post(body({ submission_id: crypto.randomUUID() }), { ip: "192.0.2.1" });
+
+    expect((await handleSubmitForm(another(), deps)).status).toBe(202);
+    expect((await handleSubmitForm(another(), deps)).status).toBe(429);
+    settings = { allowedOrigins: [ORIGIN], rateLimit: 5 };
+    expect((await handleSubmitForm(another(), deps)).status).toBe(202);
+    settings = { allowedOrigins: [], rateLimit: 5 };
+    expect((await handleSubmitForm(another(), deps)).status).toBe(403);
+  });
+
   it("answers 429 with CORS headers once an IP is over the submit limit, without queueing", async () => {
     const { deps, stats, published } = fakes();
     deps.settings = async () => ({ allowedOrigins: [ORIGIN], rateLimit: 1 });

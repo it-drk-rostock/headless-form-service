@@ -149,6 +149,47 @@ describe("describeAuditEntry", () => {
     });
   });
 
+  it("shows which allowed origins were added and removed", () => {
+    expect(
+      describeAuditEntry({
+        action: "settings.origins_changed",
+        details: {
+          from: ["http://localhost:3000"],
+          to: ["http://localhost:3000", "https://www.drk-rostock.de"],
+        },
+      }),
+    ).toEqual({
+      action: "Erlaubte Websites geändert",
+      summary: "+ https://www.drk-rostock.de",
+    });
+  });
+
+  it("shows an emptied origin list", () => {
+    expect(
+      describeAuditEntry({
+        action: "settings.origins_changed",
+        details: { from: ["https://a.de"], to: [] },
+      }).summary,
+    ).toBe("− https://a.de");
+  });
+
+  it.each([
+    [
+      "settings.load_limit_changed",
+      "Aufruf-Limit geändert",
+      "60 → 120 pro Minute und IP",
+    ],
+    [
+      "settings.submit_limit_changed",
+      "Einsende-Limit geändert",
+      "60 → 120 pro Stunde und IP",
+    ],
+  ])("describes a rate limit change (%s)", (action, label, summary) => {
+    expect(
+      describeAuditEntry({ action, details: { from: 60, to: 120 } }),
+    ).toEqual({ action: label, summary });
+  });
+
   it("shows actions it does not know yet as they are stored", () => {
     expect(
       describeAuditEntry({

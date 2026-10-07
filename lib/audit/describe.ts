@@ -46,7 +46,7 @@ const actions: Record<
     summary: (d) =>
       t("audit.summary.formRecipientsChanged", {
         name: text(d.name),
-        changes: recipientChanges(texts(d.from), texts(d.to)),
+        changes: listChanges(texts(d.from), texts(d.to)),
       }),
   },
   "form.turnstile_changed": {
@@ -75,6 +75,26 @@ const actions: Record<
         name: text(d.name),
         from: text(d.from) || DEFAULT_SENDER_NAME,
         to: text(d.to) || DEFAULT_SENDER_NAME,
+      }),
+  },
+  "settings.origins_changed": {
+    label: t("audit.action.settingsOriginsChanged"),
+    summary: (d) => listChanges(texts(d.from), texts(d.to)),
+  },
+  "settings.load_limit_changed": {
+    label: t("audit.action.settingsLoadLimitChanged"),
+    summary: (d) =>
+      t("audit.summary.settingsLoadLimit", {
+        from: text(d.from),
+        to: text(d.to),
+      }),
+  },
+  "settings.submit_limit_changed": {
+    label: t("audit.action.settingsSubmitLimitChanged"),
+    summary: (d) =>
+      t("audit.summary.settingsSubmitLimit", {
+        from: text(d.from),
+        to: text(d.to),
       }),
   },
   "form.published": {
@@ -125,11 +145,11 @@ function texts(value: unknown): string[] {
   return Array.isArray(value) ? value.map(text) : [];
 }
 
-/** Added and removed addresses; only the order changed, the new list. */
-function recipientChanges(from: string[], to: string[]): string {
+/** Added and removed entries (addresses, origins); only the order changed, the new list. */
+function listChanges(from: string[], to: string[]): string {
   const changes = [
-    ...to.filter((address) => !from.includes(address)).map((a) => `+ ${a}`),
-    ...from.filter((address) => !to.includes(address)).map((a) => `− ${a}`),
+    ...to.filter((entry) => !from.includes(entry)).map((e) => `+ ${e}`),
+    ...from.filter((entry) => !to.includes(entry)).map((e) => `− ${e}`),
   ];
   if (changes.length > 0) return changes.join(", ");
   return to.length > 0 ? to.join(", ") : t("audit.summary.none");
