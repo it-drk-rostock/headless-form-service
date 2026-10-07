@@ -63,7 +63,19 @@ describe("load_form", () => {
         schema: questions("nachname"),
         access_type: "public",
         turnstile_enabled: true,
+        is_closed: false,
       },
+    ]);
+  });
+
+  it("serves whether the form is closed", async () => {
+    await publish(questions("vorname"));
+    await db.query("update public.forms set is_closed = true where id = $1", [
+      form,
+    ]);
+
+    expect(await commitAs(db, "service", LOAD, [form])).toEqual([
+      expect.objectContaining({ version: 1, is_closed: true }),
     ]);
   });
 

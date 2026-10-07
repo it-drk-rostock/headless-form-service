@@ -86,6 +86,14 @@ describe("submitForm", () => {
     );
   });
 
+  it("reports a 409 as a closed form", async () => {
+    const { fetch } = fakeFetch(() => json({ error: "form_closed" }, 409));
+
+    expect(await submitForm(SUBMISSION, { endpoint: ENDPOINT, fetch })).toEqual(
+      { kind: "error", reason: "closed" },
+    );
+  });
+
   it("reports a refused form pass as an invalid link", async () => {
     const { fetch } = fakeFetch(() =>
       json({ error: "form_pass_invalid" }, 403),

@@ -48,6 +48,7 @@ function fakes(
       schema: SCHEMA,
       accessType: "public",
       turnstileEnabled: true,
+      isClosed: false,
     },
   },
 ) {
@@ -368,12 +369,33 @@ describe("handleSubmitForm", () => {
     expect(await response.json()).toEqual({ error: "turnstile_invalid" });
   });
 
+  it("refuses a closed form with 409, before Turnstile and without queueing", async () => {
+    const { deps, stats, published, verified } = fakes({
+      [`${FORM}/2`]: {
+        schema: SCHEMA,
+        accessType: "public",
+        turnstileEnabled: true,
+        isClosed: true,
+      },
+    });
+
+    const response = await handleSubmitForm(post(body()), deps);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "form_closed" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(verified).toEqual([]);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+  });
+
   it("refuses protected forms until form passes are claimed", async () => {
     const { deps, stats, published } = fakes({
       [`${FORM}/2`]: {
         schema: SCHEMA,
         accessType: "protected",
         turnstileEnabled: true,
+        isClosed: false,
       },
     });
 
@@ -443,6 +465,7 @@ describe("handleSubmitForm", () => {
         schema: SCHEMA,
         accessType: "public",
         turnstileEnabled: false,
+        isClosed: false,
       },
     });
 
@@ -462,6 +485,7 @@ describe("handleSubmitForm", () => {
         schema: SCHEMA,
         accessType: "protected",
         turnstileEnabled: true,
+        isClosed: false,
       },
     });
 

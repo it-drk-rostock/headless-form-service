@@ -28,6 +28,8 @@ export type SubmittedForm = {
   accessType: "public" | "protected";
   /** The form's bot check, as set now (it lives on the form, not the version). */
   turnstileEnabled: boolean;
+  /** Whether the form is closed now; a closed form takes no submissions. */
+  isClosed: boolean;
 };
 
 export type PublishRequest = {
@@ -124,6 +126,9 @@ async function submit(
 
   const form = await deps.loadVersion(ids.formId, ids.version);
   if (form === null) return reply({ error: "form_not_found" }, 404);
+  // Also for visitors who loaded the form before it was closed. Nothing else
+  // is checked, so the visitor learns why straight away.
+  if (form.isClosed) return reply({ error: "form_closed" }, 409);
 
   if (form.turnstileEnabled) {
     const refused = await checkTurnstile(request, turnstileToken, deps);

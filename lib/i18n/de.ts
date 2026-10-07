@@ -201,6 +201,9 @@ export const de = {
     "Diese Adressen erhalten jede Einsendung als E-Mail. Eine Adresse pro Zeile, höchstens {maxRecipients}.",
   "forms.recipientsNone":
     "Noch keine Empfänger. Ohne Empfänger werden Einsendungen niemandem zugestellt.",
+  "forms.closed": "Formular geschlossen",
+  "forms.closedHint":
+    "Besucher sehen statt des Formulars einen Hinweis, dass es derzeit geschlossen ist, und können nichts einsenden. Bereits angenommene Einsendungen werden weiter zugestellt.",
   "forms.turnstile": "Bot-Schutz (Cloudflare Turnstile)",
   "forms.turnstileHint":
     "Besucher werden vor dem Absenden unauffällig geprüft, ob sie Menschen sind. Nur in Ausnahmefällen ausschalten.",
@@ -432,6 +435,8 @@ export const de = {
   "audit.action.formReplyToChanged": "Antwortadresse geändert",
   "audit.action.formSenderNameChanged": "Absendername geändert",
   "audit.summary.formSettingChanged": "{name}: {from} → {to}",
+  "audit.action.formClosed": "Formular geschlossen",
+  "audit.action.formReopened": "Formular wieder geöffnet",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
   "audit.action.formVersionRestored": "Version wiederhergestellt",

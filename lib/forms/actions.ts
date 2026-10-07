@@ -96,6 +96,10 @@ export async function updateFormSettings(
   if (!isFormId(id)) return { error: "forms.errorForbidden" };
   // An unchecked switch sends nothing.
   const turnstileEnabled = formData.get("turnstileEnabled") === "on";
+  // Written only when switched, so a save from a page opened before someone
+  // else closed or reopened the form does not undo that.
+  const isClosed = formData.get("isClosed") === "on";
+  const closedChanged = isClosed !== (formData.get("wasClosed") === "true");
 
   await requireProfile();
   const supabase = await createClient();
@@ -113,6 +117,7 @@ export async function updateFormSettings(
       sender_display_name: senderName,
       reply_to_question: replyTo.replyToQuestion,
       turnstile_enabled: turnstileEnabled,
+      ...(closedChanged ? { is_closed: isClosed } : {}),
     })
     .eq("id", id)
     .select("id");

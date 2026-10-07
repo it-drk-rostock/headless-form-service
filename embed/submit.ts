@@ -4,6 +4,7 @@
 
 export type SubmitFailure =
   | "not_found"
+  | "closed"
   | "pass_invalid"
   | "rate_limited"
   | "turnstile_invalid"
@@ -55,6 +56,12 @@ export async function submitForm(
     // Accepted means sent, to the visitor (GLOSSARY).
     if (response.status === 202) return { kind: "accepted" };
     if (response.status === 404) return failure("not_found");
+    if (
+      response.status === 409 &&
+      (await errorCode(response)) === "form_closed"
+    ) {
+      return failure("closed");
+    }
     if (response.status === 429) return failure("rate_limited");
     if (response.status === 422) return failure("answers_invalid");
     if (response.status === 413) return failure("too_large");

@@ -16,6 +16,8 @@ export type LoadResult =
       /** Set when the form has Turnstile on: the widget's public key. */
       turnstileSiteKey: string | null;
     }
+  /** Closed for now: the embed shows the closed notice instead. */
+  | { kind: "closed" }
   | { kind: "error"; reason: LoadFailure };
 
 export type LoadDeps = {
@@ -42,6 +44,7 @@ export async function loadForm(
     if (response.status === 403 && errorCode(body) === "form_pass_invalid") {
       return failure("pass_invalid");
     }
+    if (response.ok && isClosed(body)) return { kind: "closed" };
     if (response.ok && isLoadedForm(body)) {
       return {
         kind: "ready",
@@ -70,6 +73,15 @@ function errorCode(body: unknown): unknown {
   return typeof body === "object" && body !== null && "error" in body
     ? body.error
     : undefined;
+}
+
+function isClosed(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "state" in body &&
+    body.state === "closed"
+  );
 }
 
 function isLoadedForm(

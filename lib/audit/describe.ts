@@ -77,6 +77,14 @@ const actions: Record<
         to: text(d.to) || DEFAULT_SENDER_NAME,
       }),
   },
+  "form.closed": {
+    label: t("audit.action.formClosed"),
+    summary: (d) => text(d.name),
+  },
+  "form.reopened": {
+    label: t("audit.action.formReopened"),
+    summary: (d) => text(d.name),
+  },
   "settings.origins_changed": {
     label: t("audit.action.settingsOriginsChanged"),
     summary: (d) => listChanges(texts(d.from), texts(d.to)),

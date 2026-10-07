@@ -180,6 +180,26 @@ describe("form settings", () => {
     expect(rows).toEqual([{ turnstile_enabled: false }]);
   });
 
+  it("can be closed by members of the owning team", async () => {
+    const rows = await queryAs(
+      db,
+      { userId: max },
+      "update public.forms set is_closed = true where id = $1 returning is_closed",
+      [form],
+    );
+    expect(rows).toEqual([{ is_closed: true }]);
+  });
+
+  it("cannot be closed by members of other teams", async () => {
+    const rows = await queryAs(
+      db,
+      { userId: bea },
+      "update public.forms set is_closed = true where id = $1 returning id",
+      [form],
+    );
+    expect(rows).toEqual([]);
+  });
+
   it("can set the Reply-To question and sender name, for members of the owning team", async () => {
     const rows = await queryAs(
       db,
@@ -376,6 +396,37 @@ describe("the audit log", () => {
     ]);
   });
 
+  it("records closing and reopening", async () => {
+    const form = await createForm(firstAid, "Kursanmeldung");
+    await commitAs(
+      db,
+      { userId: max },
+      "update public.forms set is_closed = true where id = $1",
+      [form],
+    );
+    await commitAs(
+      db,
+      { userId: anna },
+      "update public.forms set is_closed = false where id = $1",
+      [form],
+    );
+    expect((await formEntries()).slice(-2)).toEqual([
+      {
+        team_id: firstAid,
+        actor_id: max,
+        action: "form.closed",
+        entity_type: "form",
+        entity_id: form,
+        details: { name: "Kursanmeldung" },
+      },
+      expect.objectContaining({
+        actor_id: anna,
+        action: "form.reopened",
+        details: { name: "Kursanmeldung" },
+      }),
+    ]);
+  });
+
   it("records choosing and clearing the Reply-To question", async () => {
     const form = await createForm(firstAid, "Kursanmeldung");
     await commitAs(
@@ -432,7 +483,8 @@ describe("the audit log", () => {
       db,
       { userId: max },
       `update public.forms set name = name, recipients = recipients, turnstile_enabled = turnstile_enabled,
-       reply_to_question = reply_to_question, sender_display_name = sender_display_name where id = $1`,
+       reply_to_question = reply_to_question, sender_display_name = sender_display_name,
+       is_closed = is_closed where id = $1`,
       [form],
     );
     expect(await formEntries()).toHaveLength(before);

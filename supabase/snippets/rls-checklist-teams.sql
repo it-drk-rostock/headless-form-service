@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding (tickets 04-10, 20-22). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing forms (tickets 04-10, 20-23). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 37 of 37 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 39 of 39 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -227,6 +227,23 @@ begin
     raise exception 'RLS check 36 failed: Member A discarded team B''s draft changes';
   exception when insufficient_privilege then null;
   end;
+
+  -- 38. A member closes and reopens their own team's form; another team's
+  -- form they cannot close.
+  update public.forms set is_closed = true
+  where id = '00000000-0000-4000-8000-0000000000f1';
+  get diagnostics changed = row_count;
+  if changed <> 1 then
+    raise exception 'RLS check 38 failed: Member A could not close team A''s form';
+  end if;
+  update public.forms set is_closed = false
+  where id = '00000000-0000-4000-8000-0000000000f1';
+  update public.forms set is_closed = true
+  where id = '00000000-0000-4000-8000-0000000000f2';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 38 failed: Member A closed team B''s form';
+  end if;
 end $$;
 
 -- As Member B ---------------------------------------------------------------
@@ -374,10 +391,18 @@ begin
     raise exception 'RLS check 37 failed: the discard and restore of check 36 are not in the audit log';
   end if;
 
+  -- 39. A Team Admin sees the closing and reopening of check 38 in the log.
+  if (select count(distinct action) from public.audit_log
+      where action in ('form.closed', 'form.reopened')
+        and actor_id = '00000000-0000-4000-8000-00000000c003'
+        and entity_id = '00000000-0000-4000-8000-0000000000f1') <> 2 then
+    raise exception 'RLS check 39 failed: the closing and reopening of check 38 are not in the audit log';
+  end if;
+
   -- 24. Nobody signed in moves a form to another team, deletes it, sets
-  -- what only publishing, closing and archiving may set, or who saved the draft.
+  -- what only publishing and archiving may set, or who saved the draft.
   begin
-    update public.forms set is_closed = true, current_version = 1
+    update public.forms set current_version = 1
     where id = '00000000-0000-4000-8000-0000000000f1';
     raise exception 'RLS check 24 failed: the Team Admin wrote a column without a write path';
   exception when insufficient_privilege then null;
@@ -568,6 +593,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 37 of 37 checks' as result;
+select 'RLS checklist passed: 39 of 39 checks' as result;
 
 rollback;

@@ -164,13 +164,23 @@ The *Versionen* view of `/forms/[id]` lists every version, newest first, with wh
 - Both lock the form and stamp the draft with the caller, like a draft save. They are open to the same people as publishing, and they never write `form_versions`. Both wait until the editors have saved their last change, and then the designer and the email editor reopen on the replaced draft.
 - Both are part of `supabase/snippets/rls-checklist-teams.sql` (checks 36–37, plus 9).
 
+### Closing forms
+
+The *Formular geschlossen* switch in a form's settings sets `forms.is_closed`. It is saved with the other settings, only when it was switched, so a save from a page opened before a colleague closed the form leaves it closed. It takes effect at once, also for visitors who already have the form open. Members of the owning team and Super Admins may switch it.
+
+- `/load-form` answers a closed form with `200 { "state": "closed" }`, without its questions and without counting a load. The embed then shows *Dieses Formular ist derzeit geschlossen. Einsendungen sind im Moment nicht möglich.* An unpublished or archived form is still not found.
+- `/submit-form` refuses a closed form with `409 { "error": "form_closed" }`, before Turnstile, validation and queueing. The embed shows its own notice inside the form.
+- Submissions accepted before closing are still delivered.
+- Closing writes `form.closed`, and reopening writes `form.reopened` (*Formular geschlossen* / *Formular wieder geöffnet* in the audit log).
+- Checks 38–39 of `supabase/snippets/rls-checklist-teams.sql` cover it.
+
 ### Loading forms
 
 The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version, plus `turnstile_site_key` when the form has Turnstile on. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).
 
 - Only pages on `public.settings.allowed_origins` may call it. Other origins, and requests without an `Origin` header, get 403 before the form is looked at. The list is read on every request, so a change applies at once. Super Admins change it on `/settings` (see *Global settings* below). Origins must match exactly, as the browser sends them: scheme, host and any port, without a trailing slash.
 - More than `settings.load_rate_limit` requests per minute from one IP get 429 `rate_limited` (see *Rate limiting* below).
-- An unknown, never published or archived form gets 404. A protected form gets 403 without its questions, until form passes are checked (ticket 26).
+- An unknown, never published or archived form gets 404. A closed form gets `{ state: "closed" }` (see *Closing forms* above). A protected form gets 403 without its questions, until form passes are checked (ticket 26).
 - Every served load adds one to `public.form_load_counts` for the form and the day (Europe/Berlin).
 - Only the secret key can call `public.load_form(form)` and `public.count_form_load(form)`. Besides it, only Super Admins can read `settings`. Check 32 of `supabase/snippets/rls-checklist-teams.sql` verifies that the anon role has no privilege on any table, view or sequence.
 
@@ -178,7 +188,7 @@ The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supab
 
 The embed sends a completed form with `POST /functions/v1/submit-form` (`supabase/functions/submit-form/`), as JSON `{ form_id, version, submission_id, answers, turnstile_token?, honeypot }` (blueprint §4.2). The embed makes one `submission_id` per form load and sends it again on every retry.
 
-- The same allowed origins as `/load-form`. More than `settings.submit_rate_limit` requests per hour from one IP get 429 `rate_limited`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
+- The same allowed origins as `/load-form`. More than `settings.submit_rate_limit` requests per hour from one IP get 429 `rate_limited`. A version of a form that is published and not archived is accepted, older versions too, so a visitor whose form was republished meanwhile can still send it. Anything else gets 404 `form_not_found`. A closed form gets 409 `form_closed`. A protected form gets 403 `form_pass_invalid` until passes are claimed (ticket 27). A malformed body gets 400 `request_invalid`.
 - A body over 64 KB gets 413 `payload_too_large`, counted while it is read. The embed says *Ihre Angaben sind zu umfangreich …*.
 - Answers to keys that are not questions of that version are dropped (`lib/shared/answers.ts`). The rest are checked against the version's questions (`lib/shared/answer-validation.ts`), after the Turnstile check: required questions must be answered, and each answer must have the shape its question type stores (text for a comment, a list for checkboxes, and so on). Otherwise the answer is 422 `answers_invalid`, the function logs the question keys (never the answers), and the embed says *Einige Angaben fehlen oder sind ungültig …*. The embed validates with SurveyJS before sending, so only hand-made requests should get here. Required questions that can be hidden or disabled (`visibleIf`, `enableIf`, `visible: false`, `readOnly`, `hideIfChoicesEmpty`, on the question or a panel or page around it), and every required question of a form with a `complete` or `skip` trigger, are not enforced, since only SurveyJS can evaluate those conditions; expressions and question types the check does not know take any answer.
 - The function writes a `queued` row to `public.form_stats` under the submission ID. The answers are stored nowhere. It encrypts `{ answers, pass_id }` with AES-256-GCM and publishes only the IDs and the ciphertext to QStash, with the submission ID as deduplication ID and 3 retries (ADR-0001). The ciphertext is bound to the submission, form and version, so it cannot be moved to another message.

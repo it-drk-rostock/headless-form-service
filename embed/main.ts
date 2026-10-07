@@ -81,6 +81,11 @@ async function mount(element: HTMLElement): Promise<void> {
     showMessage(element, messages[result.reason], "alert");
     return;
   }
+  // A notice, not an error: the form is just not taking submissions now.
+  if (result.kind === "closed") {
+    showMessage(element, messages.closed, "status");
+    return;
+  }
 
   try {
     const model = new Model(result.schema);

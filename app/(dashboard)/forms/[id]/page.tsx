@@ -122,6 +122,7 @@ export default async function FormPage({
                 replyToQuestion={form.replyToQuestion}
                 emailQuestions={current?.emailQuestions ?? null}
                 turnstileEnabled={form.turnstileEnabled}
+                isClosed={form.isClosed}
               />
             </>
           ),

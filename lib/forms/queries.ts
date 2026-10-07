@@ -94,6 +94,7 @@ export const getForm = cache(
       ...toSummary(data),
       recipients: data.recipients,
       turnstileEnabled: data.turnstile_enabled,
+      isClosed: data.is_closed,
       replyToQuestion: data.reply_to_question,
       senderDisplayName: data.sender_display_name,
       currentVersion: data.current_version,

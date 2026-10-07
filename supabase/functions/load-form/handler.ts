@@ -1,6 +1,7 @@
 // `/load-form` (blueprint §4.1, ADR-0004): the embed's only way to get a
 // form. Serves the current version of a published, not archived form to
-// pages on the allowed origins, and counts each load.
+// pages on the allowed origins, and counts each load. A closed form gets
+// only its closed state, so the embed shows the closed notice.
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
 import { allowedMethods, withCorsHeaders } from "../_shared/cors.ts";
@@ -17,6 +18,8 @@ export type LoadedForm = {
   accessType: "public" | "protected";
   /** Whether the embed must show the Turnstile widget. */
   turnstileEnabled: boolean;
+  /** A closed form takes no submissions; its questions are not handed out. */
+  isClosed: boolean;
 };
 
 export type LoadFormDeps = {
@@ -71,6 +74,10 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
 
   const form = isUuid(formId) ? await deps.loadForm(formId) : null;
   if (form === null) return reply({ error: "form_not_found" }, 404);
+
+  // Closed comes before the pass check (blueprint §4.1): nobody could submit
+  // anyway, so there is nothing to protect. Not counted as a load.
+  if (form.isClosed) return reply({ state: "closed" });
 
   // Protected forms need a valid form pass, which ticket 26 checks. Until
   // then their questions are never handed out (ADR-0004).

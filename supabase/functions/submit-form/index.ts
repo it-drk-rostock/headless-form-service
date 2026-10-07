@@ -50,6 +50,7 @@ Deno.serve((request) =>
           schema: unknown;
           access_type: SubmittedForm["accessType"];
           turnstile_enabled: boolean;
+          is_closed: boolean;
         }>();
       if (error) throw error;
       return data === null
@@ -58,6 +59,7 @@ Deno.serve((request) =>
             schema: data.schema,
             accessType: data.access_type,
             turnstileEnabled: data.turnstile_enabled,
+            isClosed: data.is_closed,
           };
     },
     verifyTurnstile,

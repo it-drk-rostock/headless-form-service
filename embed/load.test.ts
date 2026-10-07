@@ -77,6 +77,14 @@ describe("loadForm", () => {
     });
   });
 
+  it("reports a closed form as closed", async () => {
+    const { fetch } = fakeFetch(() => json({ state: "closed" }));
+
+    expect(await loadForm(FORM, { endpoint: ENDPOINT, fetch })).toEqual({
+      kind: "closed",
+    });
+  });
+
   it("reports a missing form ID as not found without asking", async () => {
     const { fetch, requested } = fakeFetch(() => json({}));
 

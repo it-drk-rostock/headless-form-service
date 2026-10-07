@@ -38,11 +38,12 @@ type Values = {
   /** Empty for none. */
   replyToQuestion: string;
   turnstileEnabled: boolean;
+  isClosed: boolean;
 };
 
 /**
- * The form's name, recipients, sender display name, Reply-To question and
- * bot protection. *Speichern* sits top right and stays disabled until
+ * The form's name, recipients, sender display name, Reply-To question, bot
+ * protection and whether it is closed. *Speichern* sits top right and stays disabled until
  * something changed (ui-design §5).
  */
 export function FormSettings({
@@ -53,6 +54,7 @@ export function FormSettings({
   replyToQuestion,
   emailQuestions,
   turnstileEnabled,
+  isClosed,
 }: {
   id: string;
   name: string;
@@ -62,6 +64,7 @@ export function FormSettings({
   /** The current version's email questions; null while unpublished. */
   emailQuestions: EmailQuestion[] | null;
   turnstileEnabled: boolean;
+  isClosed: boolean;
 }) {
   // What is stored, as the page last rendered it. A save refreshes the page,
   // so the normalised list (or another person's change) arrives here and
@@ -72,6 +75,7 @@ export function FormSettings({
     senderDisplayName,
     replyToQuestion: replyToQuestion ?? "",
     turnstileEnabled,
+    isClosed,
   };
   const [shown, setShown] = useState<Values>(stored);
   const [values, setValues] = useState<Values>(stored);
@@ -138,6 +142,8 @@ export function FormSettings({
           </Alert>
         )}
         <input type="hidden" name="id" value={id} />
+        {/* What the page showed, so only a switch writes `is_closed`. */}
+        <input type="hidden" name="wasClosed" value={String(isClosed)} />
         <TextInput
           name="name"
           label={t("forms.name")}
@@ -235,6 +241,18 @@ export function FormSettings({
           styles={{ body: { justifyContent: "space-between", gap: 24 } }}
           mt="xs"
         />
+        <Switch
+          name="isClosed"
+          label={t("forms.closed")}
+          description={t("forms.closedHint")}
+          checked={values.isClosed}
+          onChange={(event) =>
+            setValues({ ...values, isClosed: event.currentTarget.checked })
+          }
+          labelPosition="left"
+          styles={{ body: { justifyContent: "space-between", gap: 24 } }}
+          mt="xs"
+        />
       </Stack>
     </Box>
   );
@@ -246,6 +264,7 @@ function sameValues(a: Values, b: Values): boolean {
     a.recipients === b.recipients &&
     a.senderDisplayName === b.senderDisplayName &&
     a.replyToQuestion === b.replyToQuestion &&
-    a.turnstileEnabled === b.turnstileEnabled
+    a.turnstileEnabled === b.turnstileEnabled &&
+    a.isClosed === b.isClosed
   );
 }

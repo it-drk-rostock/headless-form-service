@@ -24,6 +24,7 @@ function fakes(
       schema: SCHEMA,
       accessType: "public",
       turnstileEnabled: false,
+      isClosed: false,
     },
   },
 ) {
@@ -82,6 +83,7 @@ describe("handleLoadForm", () => {
         schema: SCHEMA,
         accessType: "public",
         turnstileEnabled: true,
+        isClosed: false,
       },
     });
 
@@ -286,6 +288,7 @@ describe("handleLoadForm", () => {
         schema: SCHEMA,
         accessType: "protected",
         turnstileEnabled: true,
+        isClosed: false,
       },
     });
 
@@ -294,6 +297,43 @@ describe("handleLoadForm", () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: "form_pass_invalid" });
     expect(counted).toEqual([]);
+  });
+
+  it("answers a closed form with its closed state only, without counting", async () => {
+    const { deps, counted } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        accessType: "public",
+        turnstileEnabled: true,
+        isClosed: true,
+      },
+    });
+
+    const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ state: "closed" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(counted).toEqual([]);
+  });
+
+  it("answers a closed protected form as closed, before asking for a pass", async () => {
+    const { deps } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        accessType: "protected",
+        turnstileEnabled: true,
+        isClosed: true,
+      },
+    });
+
+    const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ state: "closed" });
   });
 
   it("still serves the form when the load cannot be counted", async () => {

@@ -8,19 +8,23 @@ import type { BotCheckWait } from "./turnstile.ts";
  */
 export const messages = {
   loading: "Formular wird geladen …",
+  closed:
+    "Dieses Formular ist derzeit geschlossen. Einsendungen sind im Moment nicht möglich.",
   not_found: "Dieses Formular ist nicht verfügbar.",
   pass_invalid: "Dieser Link ist ungültig oder abgelaufen.",
   rate_limited:
     "Zu viele Versuche. Bitte warten Sie einen Moment und laden Sie die Seite dann neu.",
   failed:
     "Das Formular konnte nicht geladen werden. Bitte versuchen Sie es später erneut.",
-} satisfies Record<LoadFailure | "loading", string>;
+} satisfies Record<LoadFailure | "loading" | "closed", string>;
 
 /** Shown inside the form while and after it is sent. */
 export const submitMessages = {
   sending: "Ihre Angaben werden gesendet …",
   not_found:
     "Dieses Formular nimmt keine Einsendungen mehr an. Bitte laden Sie die Seite neu.",
+  closed:
+    "Dieses Formular ist derzeit geschlossen. Ihre Angaben wurden nicht gesendet.",
   pass_invalid: messages.pass_invalid,
   rate_limited: "Zu viele Einsendungen. Bitte versuchen Sie es später erneut.",
   turnstile_invalid:

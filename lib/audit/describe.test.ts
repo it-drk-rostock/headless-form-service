@@ -229,15 +229,24 @@ describe("describeAuditEntry", () => {
     ).toEqual({ action: label, summary });
   });
 
+  it.each([
+    ["form.closed", "Formular geschlossen", "Kontakt"],
+    ["form.reopened", "Formular wieder geöffnet", "Kontakt"],
+  ])("describes closing and reopening (%s)", (action, label, summary) => {
+    expect(
+      describeAuditEntry({ action, details: { name: "Kontakt" } }),
+    ).toEqual({ action: label, summary });
+  });
+
   it("shows actions it does not know yet as they are stored", () => {
     expect(
       describeAuditEntry({
-        action: "form.closed",
-        details: { name: "Kontakt", closed: true },
+        action: "form.archived",
+        details: { name: "Kontakt", archived: true },
       }),
     ).toEqual({
-      action: "form.closed",
-      summary: "name: Kontakt, closed: true",
+      action: "form.archived",
+      summary: "name: Kontakt, archived: true",
     });
   });
 });

@@ -331,6 +331,15 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 36 failed/);
   });
 
+  it("catches closing that is not recorded", async () => {
+    // A settings trigger that does not fire when is_closed changes.
+    await db.exec(`drop trigger forms_audit_settings_change on public.forms;
+      create trigger forms_audit_settings_change
+        after update of name, recipients on public.forms
+        for each row execute function private.audit_form_change()`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 39 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
