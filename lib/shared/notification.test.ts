@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   answerPlaceholders,
   answersTable,
+  DEFAULT_SENDER_NAME,
+  emailQuestions,
   escapeHtml,
   formatSubmittedAt,
+  normalizeSenderName,
   parseEmailTemplate,
   renderNotificationEmail,
+  replyToAddress,
+  senderName,
   standardLayoutHtml,
   unknownPlaceholders,
 } from "./notification.ts";
@@ -589,6 +594,108 @@ describe("parseEmailTemplate", () => {
     ["an unknown mode", { mode: "mjml", subject: "", body: "" }],
   ])("refuses %s", (_, value) => {
     expect(parseEmailTemplate(value)).toBeNull();
+  });
+});
+
+describe("emailQuestions", () => {
+  it("lists the questions that ask for an email address, in question order", () => {
+    const schema = {
+      pages: [
+        {
+          name: "seite1",
+          elements: [
+            { type: "text", name: "vorname", title: "Vorname" },
+            {
+              type: "text",
+              name: "email",
+              inputType: "email",
+              title: { default: "E-Mail", en: "Email" },
+            },
+          ],
+        },
+        {
+          name: "seite2",
+          elements: [
+            {
+              type: "panel",
+              name: "kontakt",
+              elements: [
+                { type: "text", name: "mail2", inputType: "email" },
+                {
+                  type: "text",
+                  name: "intern",
+                  valueName: "chefin",
+                  inputType: "email",
+                  title: "Leitung",
+                },
+              ],
+            },
+            { type: "comment", name: "notiz", inputType: "email" },
+            {
+              type: "paneldynamic",
+              name: "teilnehmer",
+              templateElements: [
+                { type: "text", name: "tmail", inputType: "email" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(emailQuestions(schema)).toEqual([
+      { name: "email", title: "E-Mail" },
+      { name: "mail2", title: "mail2" },
+      // Its answer, and so the setting, goes by `valueName`.
+      { name: "chefin", title: "Leitung" },
+    ]);
+  });
+
+  it("finds none in a schema without questions", () => {
+    expect(emailQuestions({})).toEqual([]);
+    expect(emailQuestions(null)).toEqual([]);
+  });
+});
+
+describe("replyToAddress", () => {
+  it("is the answer to the Reply-To question, trimmed", () => {
+    expect(
+      replyToAddress({ email: "  Erika.Muster@Example.org " }, "email"),
+    ).toBe("Erika.Muster@Example.org");
+  });
+
+  it.each([
+    ["no question is set", { email: "erika@example.org" }, null],
+    ["the question was not answered", {}, "email"],
+    ["the answer is no address", { email: "erika at example.org" }, "email"],
+    ["the answer has a line break", { email: "a@b.de\nBcc: x@y.de" }, "email"],
+    ["the answer has two addresses", { email: "a@b.de, c@d.de" }, "email"],
+    ["the answer is no text", { email: ["a@b.de"] }, "email"],
+    ["the answer is too long", { email: `${"a".repeat(250)}@b.de` }, "email"],
+  ])("is null when %s", (_, answers, question) => {
+    expect(replyToAddress(answers, question)).toBeNull();
+  });
+});
+
+describe("normalizeSenderName", () => {
+  it("trims the name and puts it on one line, without control characters", () => {
+    expect(normalizeSenderName("  DRK   Kurse ")).toBe("DRK Kurse");
+    expect(normalizeSenderName("DRK\r\nKurse")).toBe("DRK Kurse");
+    expect(normalizeSenderName("DRK\u0007Kurse\u007f")).toBe("DRK Kurse");
+    expect(normalizeSenderName("   ")).toBe("");
+  });
+});
+
+describe("senderName", () => {
+  it("is the form's display name, on one line", () => {
+    expect(senderName("  DRK Kurse ")).toBe("DRK Kurse");
+    expect(senderName("DRK\r\n  Kurse")).toBe("DRK Kurse");
+  });
+
+  it("falls back to the service's name when the form has none", () => {
+    expect(senderName("")).toBe(DEFAULT_SENDER_NAME);
+    expect(senderName("   ")).toBe(DEFAULT_SENDER_NAME);
+    expect(DEFAULT_SENDER_NAME).toBe("DRK Rostock Formular-Service");
   });
 });
 

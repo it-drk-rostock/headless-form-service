@@ -98,6 +98,9 @@ export default async function FormPage({
                 id={form.id}
                 name={form.name}
                 recipients={form.recipients}
+                senderDisplayName={form.senderDisplayName}
+                replyToQuestion={form.replyToQuestion}
+                emailQuestions={current?.emailQuestions ?? null}
                 turnstileEnabled={form.turnstileEnabled}
               />
             </>

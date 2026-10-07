@@ -174,6 +174,20 @@ export const de = {
   "forms.turnstile": "Bot-Schutz (Cloudflare Turnstile)",
   "forms.turnstileHint":
     "Besucher werden vor dem Absenden unauffällig geprüft, ob sie Menschen sind. Nur in Ausnahmefällen ausschalten.",
+  "forms.senderName": "Absendername",
+  "forms.senderNameHint":
+    "Erscheint in E-Mails zu diesem Formular neben der Absenderadresse, höchstens {max} Zeichen. Leer: „{default}“.",
+  "forms.replyTo": "Antworten an",
+  "forms.replyToHint":
+    "Die Antwort auf diese E-Mail-Frage wird Antwortadresse der E-Mail, wenn sie eine gültige E-Mail-Adresse ist. So kann direkt der Person geantwortet werden, die das Formular ausgefüllt hat.",
+  "forms.replyToNone": "Keine Antwortadresse",
+  "forms.replyToUnpublished":
+    "Wählbar, sobald das Formular veröffentlicht ist: aus den E-Mail-Fragen der aktuellen Version.",
+  "forms.replyToNoEmailQuestions":
+    "Die aktuelle Version hat keine E-Mail-Frage (Textfeld mit Eingabetyp E-Mail).",
+  "forms.replyToMissing": "{name} (nicht in der aktuellen Version)",
+  "forms.replyToMissingHint":
+    "Die gewählte Frage gibt es in der aktuellen Version nicht mehr. Neue Einsendungen beantworten sie nicht, ihre E-Mails haben dann keine Antwortadresse. Bitte eine andere Frage wählen.",
   "forms.save": "Speichern",
   "forms.saved": "Gespeichert.",
   "forms.detailTeam": "Team",
@@ -186,6 +200,10 @@ export const de = {
   "forms.errorNameMissing": "Bitte einen Namen eingeben.",
   "forms.errorNameTooLong": "Der Name darf höchstens {max} Zeichen lang sein.",
   "forms.errorTeamMissing": "Bitte ein Team wählen.",
+  "forms.errorSenderNameTooLong":
+    "Der Absendername darf höchstens {maxSenderName} Zeichen lang sein.",
+  "forms.errorReplyToInvalid":
+    "Als Antwortadresse ist nur eine E-Mail-Frage der aktuellen Version wählbar.",
   "forms.errorDraftInvalid":
     "Der Entwurf ist ungültig und konnte nicht gespeichert werden.",
   "forms.errorDraftQuestionType":
@@ -338,6 +356,9 @@ export const de = {
   "audit.action.formTurnstileChanged": "Bot-Schutz geändert",
   "audit.summary.formTurnstileOn": "{name}: eingeschaltet",
   "audit.summary.formTurnstileOff": "{name}: ausgeschaltet",
+  "audit.action.formReplyToChanged": "Antwortadresse geändert",
+  "audit.action.formSenderNameChanged": "Absendername geändert",
+  "audit.summary.formSettingChanged": "{name}: {from} → {to}",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
   "audit.summary.none": "keine",

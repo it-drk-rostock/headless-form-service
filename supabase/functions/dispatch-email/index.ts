@@ -28,11 +28,7 @@ const send = createMailjetSender({
   apiKey: secret("MAILJET_API_KEY"),
   secretKey: secret("MAILJET_SECRET_KEY"),
 });
-// The form's own sender display name comes with ticket 19.
-const sender = {
-  email: secret("NOTIFICATION_SENDER_EMAIL"),
-  name: "DRK Rostock Formular-Service",
-};
+const senderEmail = secret("NOTIFICATION_SENDER_EMAIL");
 
 Deno.serve((request) =>
   handleDispatchEmail(request, {
@@ -59,6 +55,8 @@ Deno.serve((request) =>
           email_template: unknown;
           submitted_at: string;
           status: DispatchedSubmission["status"];
+          sender_display_name: string;
+          reply_to_question: string | null;
         }>();
       if (error) throw error;
       return data === null
@@ -70,6 +68,8 @@ Deno.serve((request) =>
             schema: data.schema,
             submittedAt: new Date(data.submitted_at),
             status: data.status,
+            senderDisplayName: data.sender_display_name,
+            replyToQuestion: data.reply_to_question,
           };
     },
     send,
@@ -79,6 +79,6 @@ Deno.serve((request) =>
       });
       if (error) throw error;
     },
-    sender,
+    senderEmail,
   }),
 );

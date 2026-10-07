@@ -85,6 +85,25 @@ describe("dispatch_submission", () => {
     expect(row.submitted_at).toBeInstanceOf(Date);
   });
 
+  it("serves the form's sender name and Reply-To question as they are now", async () => {
+    await publish(questions("vorname"));
+    await commitAs(db, "service", QUEUE, [SUBMISSION, form, 1]);
+    expect(
+      await commitAs(db, "service", DISPATCH, [SUBMISSION, form, 1]),
+    ).toMatchObject([{ sender_display_name: "", reply_to_question: null }]);
+
+    await db.query(
+      "update public.forms set sender_display_name = 'DRK Kurse', reply_to_question = 'email' where id = $1",
+      [form],
+    );
+
+    expect(
+      await commitAs(db, "service", DISPATCH, [SUBMISSION, form, 1]),
+    ).toMatchObject([
+      { sender_display_name: "DRK Kurse", reply_to_question: "email" },
+    ]);
+  });
+
   it("serves a submission whose stats row is gone, with no status", async () => {
     await publish(questions("vorname"));
 

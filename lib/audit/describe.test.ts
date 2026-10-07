@@ -125,6 +125,30 @@ describe("describeAuditEntry", () => {
     ).toEqual({ action: "Bot-Schutz geändert", summary });
   });
 
+  it.each([
+    ["email", null, "Kontakt: email → keine"],
+    [null, "chefin", "Kontakt: keine → chefin"],
+  ])("describes changing the Reply-To question (%s → %s)", (from, to, summary) => {
+    expect(
+      describeAuditEntry({
+        action: "form.reply_to_changed",
+        details: { name: "Kontakt", from, to },
+      }),
+    ).toEqual({ action: "Antwortadresse geändert", summary });
+  });
+
+  it("describes a sender name change, an empty name as the service's own", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.sender_name_changed",
+        details: { name: "Kontakt", from: "", to: "DRK Kurse" },
+      }),
+    ).toEqual({
+      action: "Absendername geändert",
+      summary: "Kontakt: DRK Rostock Formular-Service → DRK Kurse",
+    });
+  });
+
   it("shows actions it does not know yet as they are stored", () => {
     expect(
       describeAuditEntry({

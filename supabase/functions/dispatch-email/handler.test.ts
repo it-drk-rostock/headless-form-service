@@ -16,12 +16,15 @@ import {
 const FORM = "3f6c1a52-8d0e-4b7a-9c1d-2e5f8a9b0c1d";
 const SUBMISSION = "0b9c2f4e-6a1d-4e8b-9f3c-5d7e1a2b4c6d";
 const SIGNATURE = "valid-signature";
-const SENDER = { email: "formulare@drk-rostock.de", name: "DRK Rostock" };
+const SENDER_EMAIL = "formulare@drk-rostock.de";
 const SCHEMA = {
   pages: [
     {
       name: "seite1",
-      elements: [{ type: "text", name: "vorname", title: "Vorname" }],
+      elements: [
+        { type: "text", name: "vorname", title: "Vorname" },
+        { type: "text", name: "email", inputType: "email", title: "E-Mail" },
+      ],
     },
   ],
 };
@@ -61,6 +64,8 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
     schema: SCHEMA,
     submittedAt: new Date("2026-10-06T12:30:00Z"),
     status: "queued",
+    senderDisplayName: "DRK Kurse",
+    replyToQuestion: null,
     ...overrides,
   };
   const sent: Mail[] = [];
@@ -80,7 +85,7 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
     markSent: async (submissionId) => {
       statuses.set(submissionId, "sent");
     },
-    sender: SENDER,
+    senderEmail: SENDER_EMAIL,
   };
   return { deps, sent, statuses };
 }
@@ -113,7 +118,7 @@ describe("handleDispatchEmail", () => {
     expect(await response.json()).toEqual({ status: "sent" });
     expect(sent).toHaveLength(1);
     const [mail] = sent;
-    expect(mail.from).toEqual(SENDER);
+    expect(mail.from).toEqual({ email: SENDER_EMAIL, name: "DRK Kurse" });
     expect(mail.to).toEqual(["kurse@drk-rostock.de", "leitung@drk-rostock.de"]);
     expect(mail.subject).toBe("Neue Einsendung: Kursanmeldung");
     expect(mail.html).toContain("<p>Eingang am 06.10.2026, 14:30</p>");
@@ -121,6 +126,47 @@ describe("handleDispatchEmail", () => {
     expect(mail.html).toContain("&lt;b&gt;Erika&lt;/b&gt;");
     expect(mail.html).not.toContain("<b>Erika</b>");
     expect(mail.customId).toBe(SUBMISSION);
+  });
+
+  it("sends from the service's name when the form has no display name", async () => {
+    const { deps, sent } = fakes({ senderDisplayName: "" });
+
+    await handleDispatchEmail(deliver(await message()), deps);
+
+    expect(sent[0].from).toEqual({
+      email: SENDER_EMAIL,
+      name: "DRK Rostock Formular-Service",
+    });
+  });
+
+  it("sets Reply-To to the answer of the form's Reply-To question", async () => {
+    const { deps, sent } = fakes({ replyToQuestion: "email" });
+
+    await handleDispatchEmail(
+      deliver(
+        await message({ vorname: "Erika", email: " erika@example.org " }),
+      ),
+      deps,
+    );
+
+    expect(sent[0].replyTo).toBe("erika@example.org");
+  });
+
+  it.each([
+    ["no Reply-To question is set", null, { email: "erika@example.org" }],
+    ["the answer is no valid address", "email", { email: "erika@" }],
+    ["the question was not answered", "email", { vorname: "Erika" }],
+  ])("sets no Reply-To when %s, and still sends", async (_, question, answers) => {
+    const { deps, sent } = fakes({ replyToQuestion: question });
+
+    const response = await handleDispatchEmail(
+      deliver(await message(answers)),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].replyTo).toBeUndefined();
   });
 
   it("renders the submitted version's template, answers included", async () => {

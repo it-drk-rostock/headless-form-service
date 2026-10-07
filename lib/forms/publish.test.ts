@@ -39,6 +39,12 @@ describe("toCurrentVersion", () => {
     version: 3,
     changelog: "Neue Frage",
     created_at: "2026-10-05T12:00:00Z",
+    schema: {
+      elements: [
+        { type: "text", name: "vorname" },
+        { type: "text", name: "email", inputType: "email", title: "E-Mail" },
+      ],
+    },
   };
 
   it("names who published by their name, else their address", () => {
@@ -52,6 +58,7 @@ describe("toCurrentVersion", () => {
       changelog: "Neue Frage",
       publishedAt: "2026-10-05T12:00:00Z",
       publishedBy: "Max Muster",
+      emailQuestions: [{ name: "email", title: "E-Mail" }],
     });
     expect(
       toCurrentVersion({

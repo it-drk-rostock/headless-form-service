@@ -180,6 +180,19 @@ describe("form settings", () => {
     expect(rows).toEqual([{ turnstile_enabled: false }]);
   });
 
+  it("can set the Reply-To question and sender name, for members of the owning team", async () => {
+    const rows = await queryAs(
+      db,
+      { userId: max },
+      `update public.forms set reply_to_question = 'email', sender_display_name = 'DRK Kurse'
+       where id = $1 returning reply_to_question, sender_display_name`,
+      [form],
+    );
+    expect(rows).toEqual([
+      { reply_to_question: "email", sender_display_name: "DRK Kurse" },
+    ]);
+  });
+
   it("cannot be changed by members of other teams", async () => {
     const rows = await queryAs(
       db,
@@ -219,6 +232,25 @@ describe("form settings", () => {
           form,
         ]),
       ).rejects.toThrow(/email_address_check|forms_recipients_check/);
+    }
+  });
+
+  it("refuse an empty Reply-To question, which is null instead", async () => {
+    await expect(
+      db.query("update public.forms set reply_to_question = '' where id = $1", [
+        form,
+      ]),
+    ).rejects.toThrow(/forms_reply_to_question_check/);
+  });
+
+  it("keep the sender name on one line", async () => {
+    for (const name of ["DRK\nKurse", "DRK\r\nBcc: x@y.de", "DRK\tKurse"]) {
+      await expect(
+        db.query(
+          "update public.forms set sender_display_name = $1 where id = $2",
+          [name, form],
+        ),
+      ).rejects.toThrow(/forms_sender_display_name_line_check/);
     }
   });
 
@@ -344,13 +376,63 @@ describe("the audit log", () => {
     ]);
   });
 
-  it("records nothing when a save leaves name and recipients as they were", async () => {
+  it("records choosing and clearing the Reply-To question", async () => {
+    const form = await createForm(firstAid, "Kursanmeldung");
+    await commitAs(
+      db,
+      { userId: max },
+      "update public.forms set reply_to_question = 'email' where id = $1",
+      [form],
+    );
+    await commitAs(
+      db,
+      { userId: anna },
+      "update public.forms set reply_to_question = null where id = $1",
+      [form],
+    );
+    expect((await formEntries()).slice(-2)).toEqual([
+      {
+        team_id: firstAid,
+        actor_id: max,
+        action: "form.reply_to_changed",
+        entity_type: "form",
+        entity_id: form,
+        details: { name: "Kursanmeldung", from: null, to: "email" },
+      },
+      expect.objectContaining({
+        actor_id: anna,
+        action: "form.reply_to_changed",
+        details: { name: "Kursanmeldung", from: "email", to: null },
+      }),
+    ]);
+  });
+
+  it("records a sender name change with the old and new name", async () => {
+    const form = await createForm(firstAid, "Kursanmeldung");
+    await commitAs(
+      db,
+      { userId: max },
+      "update public.forms set sender_display_name = 'DRK Kurse' where id = $1",
+      [form],
+    );
+    expect((await formEntries()).at(-1)).toEqual({
+      team_id: firstAid,
+      actor_id: max,
+      action: "form.sender_name_changed",
+      entity_type: "form",
+      entity_id: form,
+      details: { name: "Kursanmeldung", from: "", to: "DRK Kurse" },
+    });
+  });
+
+  it("records nothing when a save leaves the settings as they were", async () => {
     const form = await createForm(firstAid, "Kursanmeldung");
     const before = (await formEntries()).length;
     await commitAs(
       db,
       { userId: max },
-      "update public.forms set name = name, recipients = recipients, turnstile_enabled = turnstile_enabled where id = $1",
+      `update public.forms set name = name, recipients = recipients, turnstile_enabled = turnstile_enabled,
+       reply_to_question = reply_to_question, sender_display_name = sender_display_name where id = $1`,
       [form],
     );
     expect(await formEntries()).toHaveLength(before);

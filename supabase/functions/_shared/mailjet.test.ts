@@ -55,6 +55,24 @@ describe("createMailjetSender", () => {
     });
   });
 
+  it("sets Reply-To only for a mail that has one", async () => {
+    const { fetch, requests } = fakeFetch(200, {
+      Messages: [{ Status: "success" }],
+    });
+    const send = createMailjetSender({ apiKey: "k", secretKey: "s", fetch });
+
+    await send({ ...MAIL, replyTo: "erika@example.org" });
+    await send(MAIL);
+
+    const [withReplyTo, without] = await Promise.all(
+      requests.map((request) => request.json()),
+    );
+    expect(withReplyTo.Messages[0].ReplyTo).toEqual({
+      Email: "erika@example.org",
+    });
+    expect(without.Messages[0]).not.toHaveProperty("ReplyTo");
+  });
+
   it("throws with Mailjet's error codes, not its messages, when it refuses", async () => {
     const { fetch } = fakeFetch(400, {
       Messages: [

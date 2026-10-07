@@ -6,6 +6,8 @@ import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import {
   parseEmailTemplate,
   renderNotificationEmail,
+  replyToAddress,
+  senderName,
 } from "../../../lib/shared/notification.ts";
 import type { Mail } from "../_shared/mailjet.ts";
 import {
@@ -26,6 +28,10 @@ export type DispatchedSubmission = {
   submittedAt: Date;
   /** Null when the stats row is gone; the email is sent all the same. */
   status: "queued" | "sent" | "failed" | null;
+  /** The form's name for the sender; empty for the service's own. */
+  senderDisplayName: string;
+  /** The question whose answer becomes Reply-To, if the form has one. */
+  replyToQuestion: string | null;
 };
 
 export type DispatchEmailDeps = {
@@ -40,8 +46,8 @@ export type DispatchEmailDeps = {
   /** Throws when Mailjet did not accept the email. */
   send: (mail: Mail) => Promise<void>;
   markSent: (submissionId: string) => Promise<void>;
-  /** The global sender (GLOSSARY). */
-  sender: { email: string; name: string };
+  /** The global sender address (GLOSSARY, Sender). */
+  senderEmail: string;
 };
 
 const METHODS = "POST";
@@ -118,10 +124,17 @@ async function dispatch(
     schema: submission.schema,
     answers: payload.answers,
   });
+  // Like recipients and the display name, the Reply-To question is the
+  // form's as it is now (ADR-0003); the answer is the submission's.
+  const replyTo = replyToAddress(payload.answers, submission.replyToQuestion);
   try {
     await deps.send({
-      from: deps.sender,
+      from: {
+        email: deps.senderEmail,
+        name: senderName(submission.senderDisplayName),
+      },
       to: submission.recipients,
+      ...(replyTo ? { replyTo } : {}),
       subject,
       html,
       customId: ids.submissionId,

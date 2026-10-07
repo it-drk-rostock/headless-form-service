@@ -1,4 +1,5 @@
 import type { MessageKey } from "../i18n/index.ts";
+import { type EmailQuestion, emailQuestions } from "../shared/notification.ts";
 import { type ProfileNameRow, profileName } from "../shared/profile.ts";
 
 /** Same limit as the `form_versions_changelog_check` constraint in the database. */
@@ -27,16 +28,19 @@ export type CurrentVersion = {
   changelog: string | null;
   publishedAt: string;
   publishedBy: string | null;
+  /** The version's email questions, which can be the Reply-To question. */
+  emailQuestions: EmailQuestion[];
 };
 
 /** The columns behind a `CurrentVersion`; the publisher's profile through its foreign key. */
 export const CURRENT_VERSION_COLUMNS =
-  "version, changelog, created_at, publisher:profiles!form_versions_created_by_fkey(full_name, email)";
+  "version, changelog, created_at, schema, publisher:profiles!form_versions_created_by_fkey(full_name, email)";
 
 export type CurrentVersionRow = {
   version: number;
   changelog: string | null;
   created_at: string;
+  schema: unknown;
   publisher: ProfileNameRow | null;
 };
 
@@ -46,5 +50,6 @@ export function toCurrentVersion(row: CurrentVersionRow): CurrentVersion {
     changelog: row.changelog,
     publishedAt: row.created_at,
     publishedBy: profileName(row.publisher),
+    emailQuestions: emailQuestions(row.schema),
   };
 }

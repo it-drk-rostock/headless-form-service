@@ -17,6 +17,10 @@ export type FormDetails = FormSummary & {
   recipients: string[];
   /** Whether visitors pass Cloudflare Turnstile before submitting. */
   turnstileEnabled: boolean;
+  /** Answer key of the question whose answer becomes Reply-To; null for none. */
+  replyToQuestion: string | null;
+  /** Shown with the global sender address; empty for the service's own name. */
+  senderDisplayName: string;
   /** The version visitors are served; null until the first publish. */
   currentVersion: number | null;
   createdAt: string;

@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Group,
+  Select,
   Stack,
   Switch,
   Text,
@@ -20,26 +21,46 @@ import {
 } from "@/lib/forms/actions.ts";
 import { FORM_NAME_MAX_LENGTH } from "@/lib/forms/name.ts";
 import { MAX_RECIPIENTS } from "@/lib/forms/recipients.ts";
+import { SENDER_NAME_MAX_LENGTH } from "@/lib/forms/sender-name.ts";
 import { t } from "@/lib/i18n/index.ts";
+import {
+  DEFAULT_SENDER_NAME,
+  type EmailQuestion,
+} from "@/lib/shared/notification.ts";
 import { FormError } from "../../../_components/FormError.tsx";
 
 const initialState: FormActionState = { error: null };
 
-type Values = { name: string; recipients: string; turnstileEnabled: boolean };
+type Values = {
+  name: string;
+  recipients: string;
+  senderDisplayName: string;
+  /** Empty for none. */
+  replyToQuestion: string;
+  turnstileEnabled: boolean;
+};
 
 /**
- * The form's name, recipients and bot protection. *Speichern* sits top right
- * and stays disabled until something changed (ui-design §5).
+ * The form's name, recipients, sender display name, Reply-To question and
+ * bot protection. *Speichern* sits top right and stays disabled until
+ * something changed (ui-design §5).
  */
 export function FormSettings({
   id,
   name,
   recipients,
+  senderDisplayName,
+  replyToQuestion,
+  emailQuestions,
   turnstileEnabled,
 }: {
   id: string;
   name: string;
   recipients: string[];
+  senderDisplayName: string;
+  replyToQuestion: string | null;
+  /** The current version's email questions; null while unpublished. */
+  emailQuestions: EmailQuestion[] | null;
   turnstileEnabled: boolean;
 }) {
   // What is stored, as the page last rendered it. A save refreshes the page,
@@ -48,6 +69,8 @@ export function FormSettings({
   const stored: Values = {
     name,
     recipients: recipients.join("\n"),
+    senderDisplayName,
+    replyToQuestion: replyToQuestion ?? "",
     turnstileEnabled,
   };
   const [shown, setShown] = useState<Values>(stored);
@@ -61,6 +84,28 @@ export function FormSettings({
     initialState,
   );
   const changed = !sameValues(values, stored);
+  // A stored question the current version no longer has stays selectable,
+  // so it is visible, and is flagged.
+  const replyToMissing =
+    replyToQuestion !== null &&
+    !(emailQuestions ?? []).some((q) => q.name === replyToQuestion);
+  const replyToChoices = [
+    ...(emailQuestions ?? []).map((question) => ({
+      value: question.name,
+      label:
+        question.title === question.name
+          ? question.name
+          : `${question.title} (${question.name})`,
+    })),
+    ...(replyToMissing
+      ? [
+          {
+            value: replyToQuestion,
+            label: t("forms.replyToMissing", { name: replyToQuestion }),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <Box component="form" action={formAction} mt={40} maw={800}>
@@ -79,6 +124,7 @@ export function FormSettings({
               address: state.address ?? "",
               max: FORM_NAME_MAX_LENGTH,
               maxRecipients: MAX_RECIPIENTS,
+              maxSenderName: SENDER_NAME_MAX_LENGTH,
             })}
           </FormError>
         )}
@@ -126,6 +172,53 @@ export function FormSettings({
             {t("forms.recipientsNone")}
           </Text>
         )}
+        <TextInput
+          name="senderDisplayName"
+          label={t("forms.senderName")}
+          description={t("forms.senderNameHint", {
+            max: SENDER_NAME_MAX_LENGTH,
+            default: DEFAULT_SENDER_NAME,
+          })}
+          placeholder={DEFAULT_SENDER_NAME}
+          maxLength={SENDER_NAME_MAX_LENGTH}
+          value={values.senderDisplayName}
+          onChange={(event) =>
+            setValues({
+              ...values,
+              senderDisplayName: event.currentTarget.value,
+            })
+          }
+        />
+        {/* Its own hidden input: Select's is left out while disabled, which
+            would clear the stored question. */}
+        <input
+          type="hidden"
+          name="replyToQuestion"
+          value={values.replyToQuestion}
+        />
+        <Select
+          label={t("forms.replyTo")}
+          description={
+            emailQuestions === null
+              ? t("forms.replyToUnpublished")
+              : emailQuestions.length === 0 && !replyToMissing
+                ? t("forms.replyToNoEmailQuestions")
+                : t("forms.replyToHint")
+          }
+          placeholder={t("forms.replyToNone")}
+          data={replyToChoices}
+          value={values.replyToQuestion || null}
+          onChange={(value) =>
+            setValues({ ...values, replyToQuestion: value ?? "" })
+          }
+          disabled={replyToChoices.length === 0}
+          clearable
+        />
+        {replyToMissing && values.replyToQuestion === replyToQuestion && (
+          <Text fz={13} c="orange.8">
+            {t("forms.replyToMissingHint")}
+          </Text>
+        )}
         <Switch
           name="turnstileEnabled"
           label={t("forms.turnstile")}
@@ -151,6 +244,8 @@ function sameValues(a: Values, b: Values): boolean {
   return (
     a.name === b.name &&
     a.recipients === b.recipients &&
+    a.senderDisplayName === b.senderDisplayName &&
+    a.replyToQuestion === b.replyToQuestion &&
     a.turnstileEnabled === b.turnstileEnabled
   );
 }

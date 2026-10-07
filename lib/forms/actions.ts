@@ -5,7 +5,11 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "../auth/profile.ts";
 import type { MessageKey } from "../i18n/index.ts";
-import { parseEmailTemplate } from "../shared/notification.ts";
+import {
+  emailQuestions,
+  normalizeSenderName,
+  parseEmailTemplate,
+} from "../shared/notification.ts";
 import { createClient } from "../supabase/server.ts";
 import { isTeamId } from "../teams/id.ts";
 import {
@@ -20,6 +24,8 @@ import { isFormId } from "./id.ts";
 import { formNameProblem } from "./name.ts";
 import { changelogProblem, normalizeChangelog } from "./publish.ts";
 import { parseRecipients } from "./recipients.ts";
+import { parseReplyToQuestion } from "./reply-to.ts";
+import { senderNameProblem } from "./sender-name.ts";
 
 /**
  * `address` fills the `{address}` placeholder of the message. `savedAt`
@@ -62,8 +68,9 @@ export async function createForm(
 }
 
 /**
- * Saves a form's name, recipients and Turnstile switch. The database records
- * the changes in the audit log, in the same transaction.
+ * Saves a form's name, recipients, sender display name, Reply-To question
+ * and Turnstile switch. The database records the changes in the audit log,
+ * in the same transaction.
  */
 export async function updateFormSettings(
   _previous: FormActionState,
@@ -75,17 +82,30 @@ export async function updateFormSettings(
   if (problem) return { error: problem };
   const parsed = parseRecipients(String(formData.get("recipients") ?? ""));
   if ("error" in parsed) return parsed;
+  const senderName = normalizeSenderName(
+    String(formData.get("senderDisplayName") ?? ""),
+  );
+  const senderProblem = senderNameProblem(senderName);
+  if (senderProblem) return { error: senderProblem };
   if (!isFormId(id)) return { error: "forms.errorForbidden" };
   // An unchecked switch sends nothing.
   const turnstileEnabled = formData.get("turnstileEnabled") === "on";
 
   await requireProfile();
   const supabase = await createClient();
+  const replyTo = await parseReplyTo(
+    supabase,
+    id,
+    String(formData.get("replyToQuestion") ?? ""),
+  );
+  if ("error" in replyTo) return replyTo;
   const { data, error } = await supabase
     .from("forms")
     .update({
       name: name.trim(),
       recipients: parsed.recipients,
+      sender_display_name: senderName,
+      reply_to_question: replyTo.replyToQuestion,
       turnstile_enabled: turnstileEnabled,
     })
     .eq("id", id)
@@ -96,6 +116,45 @@ export async function updateFormSettings(
 
   refresh();
   return { error: null, savedAt: Date.now() };
+}
+
+/**
+ * The chosen Reply-To question, checked against the email questions of the
+ * form's current version as the database has it now.
+ */
+async function parseReplyTo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  input: string,
+): Promise<ReturnType<typeof parseReplyToQuestion>> {
+  if (input === "") return { replyToQuestion: null };
+  const { data: form, error } = await supabase
+    .from("forms")
+    .select("reply_to_question, current_version")
+    .eq("id", id)
+    .maybeSingle<{
+      reply_to_question: string | null;
+      current_version: number | null;
+    }>();
+  if (error) return { error: writeError(error) };
+  // RLS hides forms the person may not see.
+  if (!form) return { error: "forms.errorForbidden" };
+
+  let choices: string[] = [];
+  if (form.current_version !== null) {
+    const { data: version, error: versionError } = await supabase
+      .from("form_versions")
+      .select("schema")
+      .eq("form_id", id)
+      .eq("version", form.current_version)
+      .single<{ schema: unknown }>();
+    if (versionError) return { error: writeError(versionError) };
+    choices = emailQuestions(version.schema).map((question) => question.name);
+  }
+  return parseReplyToQuestion(input, {
+    choices,
+    stored: form.reply_to_question,
+  });
 }
 
 export type DraftSaveResult =

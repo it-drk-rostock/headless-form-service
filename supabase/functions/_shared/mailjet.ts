@@ -5,6 +5,8 @@
 export type Mail = {
   from: { email: string; name: string };
   to: string[];
+  /** Where replies go; without one, to the sender. */
+  replyTo?: string;
   subject: string;
   html: string;
   /** Shown in Mailjet's message log, to find a message again. */
@@ -38,6 +40,7 @@ export function createMailjetSender({
           {
             From: { Email: mail.from.email, Name: mail.from.name },
             To: mail.to.map((email) => ({ Email: email })),
+            ...(mail.replyTo ? { ReplyTo: { Email: mail.replyTo } } : {}),
             Subject: mail.subject,
             HTMLPart: mail.html,
             CustomID: mail.customId,

@@ -1,4 +1,5 @@
 import { t } from "../i18n/index.ts";
+import { DEFAULT_SENDER_NAME } from "../shared/notification.ts";
 import { isTeamRole } from "../teams/types.ts";
 import type { AuditEntry } from "./types.ts";
 
@@ -57,6 +58,24 @@ const actions: Record<
           : "audit.summary.formTurnstileOff",
         { name: text(d.name) },
       ),
+  },
+  "form.reply_to_changed": {
+    label: t("audit.action.formReplyToChanged"),
+    summary: (d) =>
+      t("audit.summary.formSettingChanged", {
+        name: text(d.name),
+        from: text(d.from) || t("audit.summary.none"),
+        to: text(d.to) || t("audit.summary.none"),
+      }),
+  },
+  "form.sender_name_changed": {
+    label: t("audit.action.formSenderNameChanged"),
+    summary: (d) =>
+      t("audit.summary.formSettingChanged", {
+        name: text(d.name),
+        from: text(d.from) || DEFAULT_SENDER_NAME,
+        to: text(d.to) || DEFAULT_SENDER_NAME,
+      }),
   },
   "form.published": {
     label: t("audit.action.formPublished"),

@@ -12,6 +12,7 @@ import {
   nonEmpty,
   questionsOf,
 } from "./answers.ts";
+import { isEmailAddress, normalizeEmail } from "./email.ts";
 import { isObject } from "./object.ts";
 
 /** A form version's `email_template` (blueprint §5.2). */
@@ -185,6 +186,61 @@ export function answerPlaceholders(schema: unknown): AnswerPlaceholder[] {
   return tableQuestions(schema)
     .filter(({ key }) => !/[{}]/.test(key) && key.trim() === key)
     .map(({ key, title }) => ({ name: ANSWERS + key, title }));
+}
+
+/** A question that asks for an email address, by its answer key. */
+export type EmailQuestion = { name: string; title: string };
+
+/**
+ * The questions of `schema` that ask for an email address, in question
+ * order: the ones that can be the form's Reply-To Field (GLOSSARY). `name`
+ * is the key the answer is stored under.
+ */
+export function emailQuestions(schema: unknown): EmailQuestion[] {
+  return questionsOf(schema)
+    .filter(
+      ({ element }) => element.type === "text" && element.inputType === "email",
+    )
+    .map(({ key, element }) => ({
+      name: key,
+      title: localized(element.title) ?? nonEmpty(element.name) ?? key,
+    }));
+}
+
+/**
+ * The Reply-To of a notification email (blueprint §4.4): the answer to the
+ * form's Reply-To question, if it is one valid email address. Null otherwise,
+ * and then replies go to the sender.
+ */
+export function replyToAddress(
+  answers: Answers,
+  question: string | null,
+): string | null {
+  if (question === null) return null;
+  const answer = answers[question];
+  if (typeof answer !== "string") return null;
+  const address = answer.trim();
+  return isEmailAddress(normalizeEmail(address)) ? address : null;
+}
+
+/** The sender's name for forms that have no display name of their own. */
+export const DEFAULT_SENDER_NAME = "DRK Rostock Formular-Service";
+
+/**
+ * A sender display name as stored: trimmed and on one line, without control
+ * characters, since it goes into the From header (the database checks the
+ * same). Empty means the service's own name.
+ */
+export function normalizeSenderName(name: string): string {
+  return name.replace(/[\s\p{Cc}]+/gu, " ").trim();
+}
+
+/**
+ * The name shown with the global sender address (GLOSSARY, Sender): the
+ * form's display name, or `DEFAULT_SENDER_NAME` without one.
+ */
+export function senderName(displayName: string): string {
+  return normalizeSenderName(displayName) || DEFAULT_SENDER_NAME;
 }
 
 /**
