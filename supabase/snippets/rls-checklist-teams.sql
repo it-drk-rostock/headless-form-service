@@ -124,9 +124,11 @@ begin
     raise exception 'RLS check 22 failed: Member A changed team B''s recipients';
   end if;
 
-  -- 26. A member saves the draft of their own team's forms, stamped with who
-  -- and when, and of no other team's.
-  update public.forms set draft_schema = '{"pages":[]}'
+  -- 26. A member saves the draft (questions and email template) of their own
+  -- team's forms, stamped with who and when, and of no other team's.
+  update public.forms
+  set draft_schema = '{"pages":[]}',
+      draft_email_template = '{"mode":"standard","subject":"RLS-Check","body":""}'
   where id = '00000000-0000-4000-8000-0000000000f1';
   if (select draft_updated_by from public.forms
       where id = '00000000-0000-4000-8000-0000000000f1')
@@ -138,6 +140,13 @@ begin
   get diagnostics changed = row_count;
   if changed <> 0 then
     raise exception 'RLS check 26 failed: Member A saved team B''s draft';
+  end if;
+  update public.forms
+  set draft_email_template = '{"mode":"standard","subject":"RLS-Check","body":""}'
+  where id = '00000000-0000-4000-8000-0000000000f2';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 26 failed: Member A saved team B''s email template';
   end if;
 
   -- 27. The draft refuses file and signature questions, from any path.

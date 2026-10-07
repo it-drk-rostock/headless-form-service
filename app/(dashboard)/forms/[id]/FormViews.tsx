@@ -8,6 +8,7 @@ import { ContentPanel } from "../../../_components/ContentPanel.tsx";
 
 const labels: Record<FormView, MessageKey> = {
   designer: "forms.viewDesigner",
+  email: "forms.viewEmail",
   settings: "forms.viewSettings",
 };
 

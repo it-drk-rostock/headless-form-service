@@ -1,4 +1,5 @@
 import type { MessageKey } from "../i18n/index.ts";
+import type { EmailTemplate } from "../shared/notification.ts";
 import { isObject } from "../shared/object.ts";
 import { type ProfileNameRow, profileName } from "../shared/profile.ts";
 
@@ -18,8 +19,12 @@ export type DraftSchema = Record<string, unknown>;
  */
 export type DraftStamp = { savedAt: string | null; savedBy: string | null };
 
-/** A form's draft questions, as the designer opens them. */
-export type FormDraft = { schema: DraftSchema; stamp: DraftStamp };
+/** A form's draft, as the designer and the email editor open it. */
+export type FormDraft = {
+  schema: DraftSchema;
+  emailTemplate: EmailTemplate;
+  stamp: DraftStamp;
+};
 
 /** The columns behind a `DraftStamp`; the editor's profile through its foreign key. */
 export const DRAFT_STAMP_COLUMNS =

@@ -1,0 +1,26 @@
+.known {
+  background: var(--mantine-color-gray-1);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.9em;
+}
+
+.unknown {
+  background: var(--mantine-color-orange-0);
+  color: var(--mantine-color-orange-9);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.9em;
+  text-decoration: underline wavy var(--mantine-color-orange-6);
+  text-underline-offset: 3px;
+}
+
+.content :global(.ProseMirror) {
+  min-height: 320px;
+}
+
+.unknownInput {
+  border-color: var(--mantine-color-orange-6);
+}

@@ -43,8 +43,8 @@ export default function DraftCreator({
 
   // Changes made, and the last of them a successful save covered.
   const changes = useRef({ made: 0, saved: 0 });
-  // A state setter, so the same function for Creator's callbacks below.
-  const { setUnsaved } = useDraftStatus();
+  // Only state setters, so they work from Creator's callbacks set up once.
+  const { setUnsaved, setSchema } = useDraftStatus();
 
   const [creator] = useState(() => {
     const creator = new SurveyCreator({
@@ -62,14 +62,15 @@ export default function DraftCreator({
     creator.JSON = schema;
     creator.onModified.add(() => {
       changes.current.made += 1;
-      setUnsaved(true);
+      setUnsaved("questions", true);
     });
     creator.saveSurveyFunc = (
       saveNo: number,
       callback: (saveNo: number, success: boolean) => void,
     ) => {
       const changesAtSave = changes.current.made;
-      saveDraft(formId, creator.JSON)
+      const saved = creator.JSON;
+      saveDraft(formId, saved)
         .catch((): DraftSaveResult => ({ error: "forms.errorGeneric" }))
         .then((result) => {
           if (result.error === null) {
@@ -77,7 +78,11 @@ export default function DraftCreator({
               changes.current.saved,
               changesAtSave,
             );
-            setUnsaved(changes.current.made > changes.current.saved);
+            setUnsaved(
+              "questions",
+              changes.current.made > changes.current.saved,
+            );
+            setSchema(saved);
           }
           callback(saveNo, result.error === null);
           onSavedRef.current(result);

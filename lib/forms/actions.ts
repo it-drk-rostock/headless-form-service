@@ -5,6 +5,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireProfile } from "../auth/profile.ts";
 import type { MessageKey } from "../i18n/index.ts";
+import { parseEmailTemplate } from "../shared/notification.ts";
 import { createClient } from "../supabase/server.ts";
 import { isTeamId } from "../teams/id.ts";
 import {
@@ -14,6 +15,7 @@ import {
   draftSchemaProblem,
   toDraftStamp,
 } from "./draft.ts";
+import { emailTemplateProblem } from "./email-template.ts";
 import { isFormId } from "./id.ts";
 import { formNameProblem } from "./name.ts";
 import { changelogProblem, normalizeChangelog } from "./publish.ts";
@@ -111,13 +113,38 @@ export async function saveDraft(
 ): Promise<DraftSaveResult> {
   const problem = draftSchemaProblem(schema);
   if (problem) return { error: problem };
+  return updateDraft(id, { draft_schema: schema });
+}
+
+/**
+ * Saves the email editor's subject and body into the form's single draft,
+ * like `saveDraft` does the questions. Recipients keep getting the current
+ * version's template until the draft is published (ADR-0003).
+ */
+export async function saveEmailTemplate(
+  id: string,
+  template: unknown,
+): Promise<DraftSaveResult> {
+  const problem = emailTemplateProblem(template);
+  if (problem) return { error: problem };
+  // Only the template's own fields, nothing else the client sent.
+  return updateDraft(id, {
+    draft_email_template: parseEmailTemplate(template),
+  });
+}
+
+/** Writes a part of the form's draft, which the database stamps. */
+async function updateDraft(
+  id: string,
+  part: { draft_schema: unknown } | { draft_email_template: unknown },
+): Promise<DraftSaveResult> {
   if (!isFormId(id)) return { error: "forms.errorForbidden" };
 
   await requireProfile();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
-    .update({ draft_schema: schema })
+    .update(part)
     .eq("id", id)
     .select(DRAFT_STAMP_COLUMNS)
     .overrideTypes<DraftStampRow[], { merge: false }>();

@@ -2,8 +2,8 @@
 // use Web-standard globals only: no Node-, Deno- or Next-specific APIs.
 //
 // The shared renderer of notification emails (blueprint §5): the dispatcher
-// sends what it renders, and the email editor's preview (ticket 17) shows the
-// same, so the two cannot drift apart. The template's own HTML is trusted;
+// sends what it renders, and the email editor's preview shows the same, so
+// the two cannot drift apart. The template's own HTML is trusted;
 // every value inserted into it is escaped.
 import {
   type Answers,
@@ -49,10 +49,36 @@ export function parseEmailTemplate(value: unknown): EmailTemplate | null {
   return { mode: value.mode, subject: value.subject, body: value.body };
 }
 
+/** The placeholders every template knows, besides the answers' (blueprint §5.1). */
+export const FORM_NAME = "form.name";
+export const SUBMITTED_AT = "submitted_at";
+export const ANSWERS_TABLE = "answers_table";
+const ANSWERS = "answers.";
+
+/** A placeholder as written in a template. */
+export function placeholderText(name: string): string {
+  return `{{${name}}}`;
+}
+
+/** Whether a placeholder can be filled in the subject, which is plain text. */
+export function fitsSubject(name: string): boolean {
+  return name !== ANSWERS_TABLE;
+}
+
 /**
- * Fills `{{form.name}}`, `{{submitted_at}}` and `{{answers_table}}`. Other
- * placeholders stay as they are. The subject is plain text, so its values are
- * not escaped and it has no answers table.
+ * `{{ name }}`: anything but braces, spaces around it ignored, so question
+ * names with spaces or umlauts work too.
+ */
+const PLACEHOLDER = /\{\{\s*([^{}]*?)\s*\}\}/g;
+
+/** A paragraph holding only the answers table, as the editor stores it. */
+const ANSWERS_TABLE_PARAGRAPH = /<p>\s*\{\{\s*answers_table\s*\}\}\s*<\/p>/g;
+
+/**
+ * Fills `{{answers.<question>}}`, `{{form.name}}`, `{{submitted_at}}` and
+ * `{{answers_table}}`. Other placeholders (e.g. `{{pass.*}}` until ticket 28,
+ * or a question a later version renamed) stay as they are. The subject is
+ * plain text, so its values are not escaped and it has no answers table.
  */
 export function renderNotificationEmail(
   template: EmailTemplate,
@@ -60,38 +86,148 @@ export function renderNotificationEmail(
 ): RenderedEmail {
   const formName = context.formName;
   const submittedAt = formatSubmittedAt(context.submittedAt);
+  const questions = new Map(
+    tableQuestions(context.schema).map((question) => [question.key, question]),
+  );
+  /** The value of `name` as text, or undefined when it is unknown. */
+  const value = (name: string): string | undefined => {
+    if (name === FORM_NAME) return formName;
+    if (name === SUBMITTED_AT) return submittedAt;
+    if (!name.startsWith(ANSWERS)) return undefined;
+    const question = questions.get(name.slice(ANSWERS.length));
+    return question && answerText(question, context.answers);
+  };
 
-  const subject = fillPlaceholders(template.subject, {
-    "form.name": formName,
-    submitted_at: submittedAt,
-    answers_table: "",
-  })
+  const subject = fillPlaceholders(template.subject, (name) =>
+    fitsSubject(name) ? value(name) : "",
+  )
     .replace(/\s+/g, " ")
     .trim();
-  const body = fillPlaceholders(template.body, {
-    "form.name": escapeHtml(formName),
-    submitted_at: escapeHtml(submittedAt),
-    answers_table: answersTable(context.schema, context.answers),
-  });
+  // A table can't sit inside a paragraph, so it takes the paragraph's place.
+  const body = fillPlaceholders(
+    template.body.replace(
+      ANSWERS_TABLE_PARAGRAPH,
+      placeholderText(ANSWERS_TABLE),
+    ),
+    (written) => {
+      const name = bodyName(written);
+      if (name === ANSWERS_TABLE) {
+        return answersTable(context.schema, context.answers);
+      }
+      const text = value(name);
+      return text === undefined
+        ? undefined
+        : escapeHtml(text).replaceAll("\n", "<br>");
+    },
+  );
   return { subject, html: standardLayout(body) };
 }
 
-/** Replaces each known `{{ name }}` in one pass, so values are never re-read. */
+/**
+ * Replaces each placeholder `value` knows in one pass, so inserted values are
+ * never read again; the others stay as written.
+ */
 function fillPlaceholders(
   text: string,
-  values: Record<string, string>,
+  value: (name: string) => string | undefined,
 ): string {
-  return text.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (placeholder, name: string) =>
-    Object.hasOwn(values, name) ? values[name] : placeholder,
+  return text.replace(
+    PLACEHOLDER,
+    (placeholder, name: string) => value(name) ?? placeholder,
   );
 }
 
 /**
- * The page around the body. Ticket 17 replaces it with the DRK
- * Rostock-branded Standard Layout.
+ * A placeholder's name in the body as the editor shows it: the HTML escapes
+ * `&`, `<`, `>` and repeated spaces of question names.
+ */
+function bodyName(written: string): string {
+  return written
+    .replaceAll("&nbsp;", " ")
+    .replaceAll(" ", " ")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&amp;", "&");
+}
+
+/** A question's placeholder, for the email editor to insert. */
+export type AnswerPlaceholder = { name: string; title: string };
+
+/**
+ * `{{answers.<question>}}` for every question of `schema` that takes an
+ * answer, in question order. Questions whose name a placeholder cannot hold
+ * (braces, spaces around it) are left out.
+ */
+export function answerPlaceholders(schema: unknown): AnswerPlaceholder[] {
+  return tableQuestions(schema)
+    .filter(({ key }) => !/[{}]/.test(key) && key.trim() === key)
+    .map(({ key, title }) => ({ name: ANSWERS + key, title }));
+}
+
+/**
+ * The placeholders the renderer fills in a body: the system ones and the
+ * answer of every question of `schema`. A subject knows those that
+ * `fitsSubject`.
+ */
+export function knownPlaceholders(schema: unknown): Set<string> {
+  return new Set([
+    FORM_NAME,
+    SUBMITTED_AT,
+    ANSWERS_TABLE,
+    ...questionsOf(schema).map(({ key }) => ANSWERS + key),
+  ]);
+}
+
+/**
+ * The placeholders of `template` the renderer would leave as written, each
+ * once and in order, as the editor shows them: they stay visible in the
+ * email, so the editor flags them.
+ */
+export function unknownPlaceholders(
+  template: EmailTemplate,
+  schema: unknown,
+): { subject: string[]; body: string[] } {
+  const known = knownPlaceholders(schema);
+  const unknownIn = (names: string[], isKnown: (name: string) => boolean) => [
+    ...new Set(names.filter((name) => !isKnown(name))),
+  ];
+  const namesIn = (text: string) =>
+    findPlaceholders(text).map(({ name }) => name);
+  return {
+    subject: unknownIn(
+      namesIn(template.subject),
+      (name) => fitsSubject(name) && known.has(name),
+    ),
+    body: unknownIn(namesIn(template.body).map(bodyName), (name) =>
+      known.has(name),
+    ),
+  };
+}
+
+/** A placeholder in a text: where it starts, how long it is, and its name. */
+export type FoundPlaceholder = { index: number; length: number; name: string };
+
+/** Every placeholder in `text`, as the renderer reads them. */
+export function findPlaceholders(text: string): FoundPlaceholder[] {
+  return [...text.matchAll(PLACEHOLDER)].map((match) => ({
+    index: match.index,
+    length: match[0].length,
+    name: match[1],
+  }));
+}
+
+const FONT = "Arial,Helvetica,sans-serif";
+
+/**
+ * The DRK Rostock-branded Standard Layout around the body (blueprint §5.2):
+ * a red header, the body on a white card, and a footer. Tables and inline
+ * styles, so mail clients render it alike; at most 640px wide, narrower on
+ * phones. No emblem: only official logo files may be used (ui-design §7).
  */
 function standardLayout(body: string): string {
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">${body}</body></html>`;
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>.inhalt h2{font-size:20px;line-height:1.3;margin:0 0 12px}.inhalt h3{font-size:17px;line-height:1.3;margin:20px 0 8px}.inhalt p{margin:0 0 12px}.inhalt a{color:#E60005}.inhalt hr{border:0;border-top:1px solid #dee2e6;margin:20px 0}.inhalt ul,.inhalt ol{margin:0 0 12px;padding-left:24px}</style></head><body style="margin:0;padding:0;background:#f1f3f5"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f3f5"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #dee2e6;border-collapse:separate"><tr><td style="background:#E60005;padding:16px 24px;font-family:${FONT};font-size:18px;font-weight:bold;color:#ffffff">DRK Rostock</td></tr><tr><td class="inhalt" style="padding:24px;font-family:${FONT};font-size:15px;line-height:1.5;color:#1a1a1a">${body}</td></tr><tr><td style="padding:16px 24px;border-top:1px solid #dee2e6;font-family:${FONT};font-size:12px;line-height:1.5;color:#868e96">Diese E-Mail wurde automatisch vom Formular-Service des DRK Rostock versendet.</td></tr></table></td></tr></table></body></html>`;
 }
 
 export function escapeHtml(text: string): string {

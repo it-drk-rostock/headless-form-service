@@ -34,6 +34,7 @@ describe("formView", () => {
   it("opens the view the URL names", () => {
     expect(formView("settings")).toBe("settings");
     expect(formView("designer")).toBe("designer");
+    expect(formView("email")).toBe("email");
   });
 
   it("falls back to the designer", () => {

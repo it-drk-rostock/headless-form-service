@@ -79,12 +79,56 @@ export const de = {
   "forms.status.archived": "Archiviert",
   "forms.settingsTitle": "Einstellungen",
   "forms.viewDesigner": "Designer",
+  "forms.viewEmail": "E-Mail",
   "forms.viewSettings": "Einstellungen",
   "forms.designerHint":
     "Änderungen werden automatisch im Entwurf gespeichert. Besucher sehen sie erst nach dem Veröffentlichen.",
   "forms.draftNeverSaved": "Entwurf noch nicht gespeichert",
   "forms.draftSaved": "Entwurf gespeichert am {at}",
   "forms.draftSavedBy": "Entwurf gespeichert am {at} von {by}",
+  "forms.emailHint":
+    "Änderungen werden automatisch im Entwurf gespeichert. Empfänger erhalten die neue Vorlage erst nach dem Veröffentlichen.",
+  "forms.emailSubject": "Betreff",
+  "forms.emailSubjectHint": "Reiner Text, höchstens {max} Zeichen.",
+  "forms.emailBody": "Inhalt",
+  "forms.emailBodyHint":
+    "Erscheint im Standard-Layout des DRK Rostock, zwischen Kopf- und Fußzeile.",
+  "forms.emailInsert": "Platzhalter einfügen",
+  "forms.emailInsertHint":
+    "Fügt an der zuletzt gewählten Stelle im Betreff oder Inhalt ein.",
+  "forms.emailInsertQuestions": "Antworten",
+  "forms.emailInsertNoQuestions": "Der Entwurf hat noch keine Fragen.",
+  "forms.emailInsertGeneral": "Allgemein",
+  "forms.emailPlaceholderFormName": "Name des Formulars",
+  "forms.emailPlaceholderSubmittedAt": "Zeitpunkt der Einsendung",
+  "forms.emailPlaceholderAnswersTable": "Alle Antworten als Tabelle",
+  "forms.emailAnswersTable": "Antworttabelle einfügen",
+  "forms.emailUnknownTitle": "Unbekannte Platzhalter",
+  "forms.emailUnknownHint":
+    "Diese Platzhalter werden nicht ersetzt und erscheinen unverändert in der E-Mail. Bitte korrigieren oder entfernen.",
+  "forms.emailUnknownSubject": "Betreff:",
+  "forms.emailUnknownBody": "Inhalt:",
+  "forms.emailPreview": "Vorschau",
+  "forms.emailPreviewHint":
+    "Mit Beispielantworten, so wie die E-Mail bei den Empfängern ankommt.",
+  "forms.emailPreviewFrame": "Vorschau der Benachrichtigungs-E-Mail",
+  "editor.bold": "Fett",
+  "editor.italic": "Kursiv",
+  "editor.underline": "Unterstrichen",
+  "editor.h2": "Überschrift",
+  "editor.h3": "Zwischenüberschrift",
+  "editor.bulletList": "Aufzählung",
+  "editor.orderedList": "Nummerierte Liste",
+  "editor.link": "Link einfügen",
+  "editor.unlink": "Link entfernen",
+  "editor.hr": "Trennlinie",
+  "editor.undo": "Rückgängig",
+  "editor.redo": "Wiederholen",
+  "editor.linkUrl": "Adresse des Links",
+  "editor.linkExample": "https://www.drk-rostock.de",
+  "editor.linkExternal": "Link öffnet in einem neuen Tab",
+  "editor.linkInternal": "Link öffnet im selben Tab",
+  "editor.linkSave": "Übernehmen",
   "forms.notPublished": "Noch nicht veröffentlicht",
   "forms.notPublishedHint":
     "Besucher sehen das Formular erst nach dem ersten Veröffentlichen.",
@@ -97,7 +141,7 @@ export const de = {
   "forms.publishText":
     "Der Entwurf, Fragen und E-Mail-Vorlage, wird als Version {version} gespeichert. Besucher sehen ab sofort diese Version.",
   "forms.publishWaitsForSave":
-    "Der Designer hat Änderungen, die noch nicht gespeichert sind. Veröffentlichen ist möglich, sobald sie gespeichert sind.",
+    "Der Entwurf hat Änderungen, die noch nicht gespeichert sind. Veröffentlichen ist möglich, sobald sie gespeichert sind.",
   "forms.publishNoRecipients":
     "Dieses Formular hat noch keine Empfänger. Einsendungen werden erst zugestellt, wenn unter Einstellungen Empfänger eingetragen sind.",
   "forms.changelog": "Änderungsnotiz",
@@ -132,6 +176,13 @@ export const de = {
     "Der Entwurf ist ungültig und konnte nicht gespeichert werden.",
   "forms.errorDraftQuestionType":
     "Datei- und Unterschriftsfragen sind nicht erlaubt. Bitte entfernen und erneut speichern.",
+  "forms.errorEmailInvalid":
+    "Die E-Mail-Vorlage ist ungültig und konnte nicht gespeichert werden.",
+  "forms.errorEmailSubjectMissing": "Bitte einen Betreff eingeben.",
+  "forms.errorEmailSubjectTooLong":
+    "Der Betreff darf höchstens {max} Zeichen lang sein.",
+  "forms.errorEmailBodyTooLong":
+    "Der Inhalt darf höchstens {max} Zeichen lang sein.",
   "forms.errorChangelogTooLong":
     "Die Änderungsnotiz darf höchstens {max} Zeichen lang sein.",
   "forms.errorPublishEmpty":

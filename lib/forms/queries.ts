@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { requireProfile } from "../auth/profile.ts";
+import { parseEmailTemplate } from "../shared/notification.ts";
 import { createClient } from "../supabase/server.ts";
 import {
   DRAFT_STAMP_COLUMNS,
@@ -94,8 +95,9 @@ export const getForm = cache(
 );
 
 /**
- * A form's draft questions with who saved them last, for the designer. Null
- * when the form does not exist or the person may not see it.
+ * A form's draft questions and email template with who saved them last, for
+ * the designer and the email editor. Null when the form does not exist or
+ * the person may not see it.
  */
 export async function getFormDraft(id: string): Promise<FormDraft | null> {
   if (!isFormId(id)) return null;
@@ -103,11 +105,14 @@ export async function getFormDraft(id: string): Promise<FormDraft | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
-    .select(`draft_schema, ${DRAFT_STAMP_COLUMNS}`)
+    .select(`draft_schema, draft_email_template, ${DRAFT_STAMP_COLUMNS}`)
     .eq("id", id)
     .maybeSingle()
     .overrideTypes<
-      DraftStampRow & { draft_schema: DraftSchema },
+      DraftStampRow & {
+        draft_schema: DraftSchema;
+        draft_email_template: unknown;
+      },
       { merge: false }
     >();
   if (error) {
@@ -116,7 +121,16 @@ export async function getFormDraft(id: string): Promise<FormDraft | null> {
     );
   }
   if (!data) return null;
-  return { schema: data.draft_schema, stamp: toDraftStamp(data) };
+  // The database only stores templates of this shape.
+  const emailTemplate = parseEmailTemplate(data.draft_email_template);
+  if (!emailTemplate) {
+    throw new Error(`Draft of form ${id} has no readable email template`);
+  }
+  return {
+    schema: data.draft_schema,
+    emailTemplate,
+    stamp: toDraftStamp(data),
+  };
 }
 
 /**

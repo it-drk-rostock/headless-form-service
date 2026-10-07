@@ -5,9 +5,10 @@ import { IconInfoCircle } from "@tabler/icons-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import type { DraftSaveResult } from "@/lib/forms/actions.ts";
-import type { DraftStamp, FormDraft } from "@/lib/forms/draft.ts";
-import { formatDateTime, t } from "@/lib/i18n/index.ts";
+import type { DraftSchema } from "@/lib/forms/draft.ts";
+import { t } from "@/lib/i18n/index.ts";
 import { FormError } from "../../../_components/FormError.tsx";
+import { DraftSavedStatus, useDraftStatus } from "./DraftStatus.tsx";
 
 // Creator needs the browser (DOM, drag and drop), so it is not rendered on
 // the server.
@@ -26,17 +27,17 @@ const DraftCreator = dynamic(() => import("./DraftCreator.tsx"), {
  */
 export function FormDesigner({
   formId,
-  draft,
+  schema,
 }: {
   formId: string;
-  draft: FormDraft;
+  schema: DraftSchema;
 }) {
-  const [saved, setSaved] = useState(draft.stamp);
+  const { setStamp } = useDraftStatus();
   const [result, setResult] = useState<DraftSaveResult | null>(null);
 
   function handleSaved(next: DraftSaveResult) {
     setResult(next);
-    if (next.error === null) setSaved(next.stamp);
+    if (next.error === null) setStamp(next.stamp);
   }
 
   return (
@@ -50,9 +51,7 @@ export function FormDesigner({
         >
           <Text fz={13}>{t("forms.designerHint")}</Text>
         </Alert>
-        <Text fz={13} c="gray.6" role="status">
-          {stampText(saved)}
-        </Text>
+        <DraftSavedStatus />
       </Group>
       {result?.error && (
         <Box mb="sm">
@@ -66,20 +65,8 @@ export function FormDesigner({
         mih={560}
         style={{ overflow: "hidden" }}
       >
-        <DraftCreator
-          formId={formId}
-          schema={draft.schema}
-          onSaved={handleSaved}
-        />
+        <DraftCreator formId={formId} schema={schema} onSaved={handleSaved} />
       </Paper>
     </Box>
   );
-}
-
-function stampText({ savedAt, savedBy }: DraftStamp): string {
-  if (!savedAt) return t("forms.draftNeverSaved");
-  const at = formatDateTime(savedAt);
-  return savedBy
-    ? t("forms.draftSavedBy", { at, by: savedBy })
-    : t("forms.draftSaved", { at });
 }

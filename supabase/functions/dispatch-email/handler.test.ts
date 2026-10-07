@@ -123,6 +123,21 @@ describe("handleDispatchEmail", () => {
     expect(mail.customId).toBe(SUBMISSION);
   });
 
+  it("renders the submitted version's template, answers included", async () => {
+    const { deps, sent } = fakes({
+      template: {
+        mode: "standard",
+        subject: "Anmeldung von {{answers.vorname}}",
+        body: "<p>Hallo {{answers.vorname}}</p>",
+      },
+    });
+
+    await handleDispatchEmail(deliver(await message()), deps);
+
+    expect(sent[0].subject).toBe("Anmeldung von <b>Erika</b>");
+    expect(sent[0].html).toContain("<p>Hallo &lt;b&gt;Erika&lt;/b&gt;</p>");
+  });
+
   it("marks the submission sent", async () => {
     const { deps, statuses } = fakes();
 

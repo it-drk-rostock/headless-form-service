@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  answerPlaceholders,
   answersTable,
   escapeHtml,
   formatSubmittedAt,
   parseEmailTemplate,
   renderNotificationEmail,
+  unknownPlaceholders,
 } from "./notification.ts";
 
 const page = (...elements: unknown[]) => ({
@@ -246,7 +248,7 @@ describe("renderNotificationEmail", () => {
     );
 
     expect(html).toContain("{{answers_table}}");
-    expect(html).not.toContain("<table");
+    expect(html).not.toContain("<th");
   });
 
   it("keeps the subject on one line and leaves out the answers table there", () => {
@@ -267,12 +269,230 @@ describe("renderNotificationEmail", () => {
       {
         mode: "standard",
         subject: "",
-        body: "<p>{{answers.vorname}} {{unbekannt}}</p>",
+        body: "<p>{{answers.geloescht}} {{unbekannt}} {{pass.ticket}}</p>",
       },
       context,
     );
 
-    expect(html).toContain("<p>{{answers.vorname}} {{unbekannt}}</p>");
+    expect(html).toContain(
+      "<p>{{answers.geloescht}} {{unbekannt}} {{pass.ticket}}</p>",
+    );
+  });
+
+  it("puts the answers table in place of a paragraph holding only it", () => {
+    const { html } = renderNotificationEmail(
+      {
+        mode: "standard",
+        subject: "",
+        body: "<p>Hallo</p><p> {{answers_table}} </p><p>Text {{answers_table}}</p>",
+      },
+      context,
+    );
+
+    expect(html).not.toMatch(/<p>\s*<table/);
+    expect(html).toContain("<p>Hallo</p><table");
+    expect(html).toContain("<p>Text <table");
+  });
+});
+
+describe("renderNotificationEmail: {{answers.*}}", () => {
+  const schema = page(
+    { type: "text", name: "vorname", title: "Vorname" },
+    {
+      type: "radiogroup",
+      name: "kurs",
+      choices: [{ value: "eh", text: "Erste Hilfe" }],
+      showOtherItem: true,
+    },
+    { type: "boolean", name: "foto" },
+    { type: "comment", name: "anmerkung" },
+    { type: "text", name: "Name des Kindes" },
+    { type: "text", name: "leer" },
+  );
+  const answers = {
+    vorname: "<b>Erika</b>",
+    kurs: "other",
+    "kurs-Comment": "Fahrsicherheit",
+    foto: false,
+    anmerkung: "Zeile 1\nZeile 2",
+    "Name des Kindes": "Max",
+  };
+  const render = (subject: string, body: string) =>
+    renderNotificationEmail(
+      { mode: "standard", subject, body },
+      { formName: "Kurs", submittedAt: SUBMITTED_AT, schema, answers },
+    );
+
+  it("fills an answer in the body, escaped, as the answers table shows it", () => {
+    const { html } = render(
+      "",
+      "<p>{{answers.vorname}} | {{ answers.kurs }} | {{answers.foto}} | {{answers.Name des Kindes}}</p>",
+    );
+
+    expect(html).toContain(
+      "<p>&lt;b&gt;Erika&lt;/b&gt; | Sonstiges: Fahrsicherheit | Nein | Max</p>",
+    );
+  });
+
+  it("reads a question name the body's HTML escaped", () => {
+    const { html } = renderNotificationEmail(
+      {
+        mode: "standard",
+        subject: "{{answers.Ort & Datum}}",
+        body: "<p>{{answers.Ort &amp; Datum}} {{answers.a&nbsp; b}}</p>",
+      },
+      {
+        formName: "Kurs",
+        submittedAt: SUBMITTED_AT,
+        schema: page(
+          { type: "text", name: "Ort & Datum" },
+          { type: "text", name: "a  b" },
+        ),
+        answers: { "Ort & Datum": "Rostock", "a  b": "x" },
+      },
+    );
+
+    expect(html).toContain("<p>Rostock x</p>");
+  });
+
+  it("keeps line breaks of an answer in the body", () => {
+    expect(render("", "<p>{{answers.anmerkung}}</p>").html).toContain(
+      "<p>Zeile 1<br>Zeile 2</p>",
+    );
+  });
+
+  it("fills an answer in the subject as plain text on one line", () => {
+    expect(
+      render("{{answers.vorname}}: {{answers.anmerkung}}", "").subject,
+    ).toBe("<b>Erika</b>: Zeile 1 Zeile 2");
+  });
+
+  it("leaves a question that was not answered empty", () => {
+    expect(render("[{{answers.leer}}]", "<p>[{{answers.leer}}]</p>")).toEqual(
+      expect.objectContaining({ subject: "[]" }),
+    );
+    expect(render("", "<p>[{{answers.leer}}]</p>").html).toContain("<p>[]</p>");
+  });
+
+  it("does not let an answer introduce another placeholder", () => {
+    const { html } = renderNotificationEmail(
+      {
+        mode: "standard",
+        subject: "",
+        body: "<p>{{answers.vorname}}</p>",
+      },
+      {
+        formName: "Kurs",
+        submittedAt: SUBMITTED_AT,
+        schema,
+        answers: { vorname: "{{answers_table}}" },
+      },
+    );
+
+    expect(html).toContain("<p>{{answers_table}}</p>");
+  });
+});
+
+describe("standard layout", () => {
+  it("wraps the body in the branded DRK Rostock layout", () => {
+    const { html } = renderNotificationEmail(
+      { mode: "standard", subject: "", body: "<p>Inhalt</p>" },
+      {
+        formName: "Kurs",
+        submittedAt: SUBMITTED_AT,
+        schema: page(),
+        answers: {},
+      },
+    );
+
+    expect(html).toMatch(/^<!doctype html><html lang="de">/);
+    expect(html).toContain("DRK Rostock");
+    expect(html).toContain("#E60005");
+    expect(html).toContain("<p>Inhalt</p>");
+  });
+});
+
+describe("answerPlaceholders", () => {
+  it("lists a placeholder per question, labelled with its title", () => {
+    const schema = {
+      pages: [
+        {
+          name: "seite1",
+          elements: [
+            { type: "text", name: "vorname", title: { de: "Vorname" } },
+            {
+              type: "panel",
+              name: "p",
+              elements: [{ type: "text", name: "plz" }],
+            },
+            { type: "html", name: "hinweis" },
+            { type: "text", name: "a}}b" },
+          ],
+        },
+      ],
+    };
+
+    expect(answerPlaceholders(schema)).toEqual([
+      { name: "answers.vorname", title: "Vorname" },
+      { name: "answers.plz", title: "plz" },
+    ]);
+  });
+});
+
+describe("unknownPlaceholders", () => {
+  const schema = page(
+    { type: "text", name: "vorname" },
+    { type: "text", name: "Name des Kindes" },
+  );
+
+  it("knows the system placeholders and the answers of the questions", () => {
+    expect(
+      unknownPlaceholders(
+        {
+          mode: "standard",
+          subject: "{{form.name}} {{submitted_at}} {{answers.vorname}}",
+          body: "<p>{{ form.name }} {{submitted_at}} {{answers.Name des Kindes}}</p>{{answers_table}}",
+        },
+        schema,
+      ),
+    ).toEqual({ subject: [], body: [] });
+  });
+
+  it("reads names in the body as the editor shows them, unescaped", () => {
+    expect(
+      unknownPlaceholders(
+        {
+          mode: "standard",
+          subject: "S",
+          body: "<p>{{answers.Ort &amp; Datum}} {{answers.<strong>vorname</strong>}}</p>",
+        },
+        page(
+          { type: "text", name: "Ort & Datum" },
+          { type: "text", name: "vorname" },
+        ),
+      ),
+    ).toEqual({
+      subject: [],
+      // Formatting inside a placeholder breaks it, so it is flagged.
+      body: ["answers.<strong>vorname</strong>"],
+    });
+  });
+
+  it("names each unknown placeholder once, in order", () => {
+    expect(
+      unknownPlaceholders(
+        {
+          mode: "standard",
+          subject: "{{answers_table}} {{form.id}}",
+          body: "<p>{{answers.nachname}} {{pass.ticket}} {{answers.nachname}} {{}}</p>",
+        },
+        schema,
+      ),
+    ).toEqual({
+      // The subject is plain text, which has no answers table.
+      subject: ["answers_table", "form.id"],
+      body: ["answers.nachname", "pass.ticket", ""],
+    });
   });
 });
 
