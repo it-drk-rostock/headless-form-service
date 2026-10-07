@@ -9,7 +9,8 @@ import { SettingsForm } from "./SettingsForm.tsx";
 export const metadata: Metadata = { title: t("settings.title") };
 
 /**
- * The global settings, for Super Admins: allowed origins and rate limits.
+ * The global settings, for Super Admins: allowed origins, allowed
+ * recipient domains and rate limits.
  * For everyone else this page does not exist.
  */
 export default async function SettingsPage() {

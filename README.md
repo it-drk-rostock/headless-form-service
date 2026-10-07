@@ -126,20 +126,23 @@ In the "Current setup: local testing" mode, the emails come from Supabase's buil
 
 ### Global settings
 
-Super Admins change the allowed origins and both rate limits on `/settings` (rail icon *Einstellungen*, bottom). Everyone else gets "not found". `/load-form` and `/submit-form` read the `public.settings` row on every request, so a saved change applies to the next request, without a redeploy.
+Super Admins change the allowed origins, the allowed recipient domains and both rate limits on `/settings` (rail icon *Einstellungen*, bottom). Everyone else gets "not found". `/load-form` and `/submit-form` read the `public.settings` row on every request, so a saved change applies to the next request, without a redeploy.
 
 - **Allowed origins:** one per line, or separated by commas, semicolons or spaces. The dashboard stores each as browsers send it (lower case, without a default port or trailing slash, international domains in ASCII), each once, at most 100. Paths, wildcards, credentials and IPv6 addresses are refused. An empty list means no site can embed forms.
+- **Allowed recipient domains:** every recipient of every form must be on one of these email domains, so submissions cannot be redirected to private mailboxes. One per line, or separated by commas, semicolons or spaces; a leading `@` is dropped. Stored in lower case, each once, at most 100. Only the exact domain counts: `kv.drk-rostock.de` needs its own entry next to `drk-rostock.de`. The list starts as `drk-rostock.de`. An empty list means no form can save recipients or send emails.
+  - A database trigger (`private.check_recipient_domains()`) refuses a form's recipient list with an address elsewhere, whoever writes it, with SQLSTATE `HF006` and the first such address as detail; the dashboard names it in German. The check runs only when the list changes, so a form whose domain was removed since keeps its other settings editable.
+  - `/dispatch-email` sends only to recipients on the list as it is at delivery (see *Delivering submissions*).
 - **Rate limits:** whole numbers from 1 to 100 000. Loads count per minute and IP, submissions per hour and IP.
-- The database checks the same rules (`settings_*_check`). RLS lets only Super Admins read and update the row, and only those three columns. Nobody adds or deletes the row through the Data API.
-- Each changed setting is recorded in the audit log (`settings.origins_changed`, `settings.load_limit_changed`, `settings.submit_limit_changed`, with old and new value). The entries belong to no team, so only Super Admins see them, on `/audit-log`.
-- The settings are part of `supabase/snippets/rls-checklist-teams.sql` (checks 33 and 34).
+- The database checks the same rules (`settings_*_check`). RLS lets only Super Admins read and update the row, and only those four columns. Nobody adds or deletes the row through the Data API.
+- Each changed setting is recorded in the audit log (`settings.origins_changed`, `settings.recipient_domains_changed`, `settings.load_limit_changed`, `settings.submit_limit_changed`, with old and new value). The entries belong to no team, so only Super Admins see them, on `/audit-log`.
+- The settings are part of `supabase/snippets/rls-checklist-teams.sql` (checks 33–35).
 
 ### Forms
 
 `public.forms` holds each team's forms: settings that take effect at once (name, recipients, and later closed, archived and the rest), plus the single draft. Any member of the owning team, and every Super Admin, can create a form and change its name, recipients and bot protection (see *Bot protection* below). `/forms` lists the forms of all your teams, without archived ones. `/forms/[id]` shows a form's settings.
 
 - Creating a form asks which of your teams owns it. A form never moves to another team, and nobody deletes it through the Data API.
-- Recipients must be lower-case email addresses (the `public.email_address` domain, at most 20 per form). The dashboard accepts one per line, or separated by commas or semicolons, and stores them lower-case, each once. A new form starts without recipients; they are set afterwards, so every list shows up in the audit log as a change.
+- Recipients must be lower-case email addresses (the `public.email_address` domain, at most 20 per form) on an allowed recipient domain (see *Global settings*). The dashboard accepts one per line, or separated by commas or semicolons, and stores them lower-case, each once. A new form starts without recipients; they are set afterwards, so every list shows up in the audit log as a change.
 - Creating, renaming, recipient changes and switching bot protection are recorded in the audit log by database triggers, with the old and new value.
 - Forms are part of `supabase/snippets/rls-checklist-teams.sql` (checks 20–25, plus 4 and 9).
 
@@ -224,11 +227,11 @@ npx supabase secrets set TURNSTILE_SITE_KEY=<site key> TURNSTILE_SECRET_KEY=<sec
 QStash delivers each queued submission to `POST /functions/v1/dispatch-email` (`supabase/functions/dispatch-email/`, blueprint §4.4). Only QStash can call it:
 
 - A request without a valid `Upstash-Signature` for exactly this URL and body gets 401 `signature_invalid`. The function has `verify_jwt = false`, since QStash sends no Supabase JWT.
-- It decrypts the answers, then loads the form's name and recipients and the submitted version's questions and email template (`public.dispatch_submission`). Recipients take effect at once, also for submissions already queued; the template is the version's (ADR-0003). An archived form still gets the submissions it accepted.
+- It decrypts the answers, then loads the form's name and recipients and the submitted version's questions and email template (`public.dispatch_submission`). Recipients take effect at once, also for submissions already queued; the template is the version's (ADR-0003). An archived form still gets the submissions it accepted. Recipients outside the allowed recipient domains as they are now get nothing; the function logs how many were skipped, not who.
 - The shared renderer (`lib/shared/notification.ts`) fills `{{form.name}}`, `{{submitted_at}}` (de-DE, German time) and `{{answers_table}}`. Every inserted value is HTML-escaped; the template's own HTML is trusted. The subject is plain text without the answers table. Other placeholders stay as they are until tickets 17 and 28.
-- One email goes through Mailjet's Send API v3.1 to all of the form's recipients, from `NOTIFICATION_SENDER_EMAIL` with the form's sender display name, or *DRK Rostock Formular-Service* when it has none. If the form has a Reply-To question and its answer is a valid email address, that address is the email's Reply-To. Its Mailjet `CustomID` is the submission ID.
+- One email goes through Mailjet's Send API v3.1 to the form's recipients on an allowed recipient domain, from `NOTIFICATION_SENDER_EMAIL` with the form's sender display name, or *DRK Rostock Formular-Service* when it has none. If the form has a Reply-To question and its answer is a valid email address, that address is the email's Reply-To. Its Mailjet `CustomID` is the submission ID.
 - Then `form_stats.status` becomes `sent`. A redelivery of a submission already `sent` answers 200 without a second email. A submission whose stats row is gone is sent all the same.
-- Anything other than 2xx makes QStash retry: 502 `mail_failed` when Mailjet refuses, 404 `form_not_found`, 422 for a form without recipients, an unreadable template or a ciphertext that cannot be decrypted, 500 otherwise. After the retries, the message lands in the dead-letter queue; marking it failed is ticket 30.
+- Anything other than 2xx makes QStash retry: 502 `mail_failed` when Mailjet refuses, 404 `form_not_found`, 422 for a form without recipients, one with no recipient on an allowed domain (`recipients_not_allowed`), an unreadable template or a ciphertext that cannot be decrypted, 500 otherwise. After the retries, the message lands in the dead-letter queue; marking it failed is ticket 30.
 
 The function needs these secrets besides `SUBMISSION_ENCRYPTION_KEYS` (the same value as for `/submit-form`):
 

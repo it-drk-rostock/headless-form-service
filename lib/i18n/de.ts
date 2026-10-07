@@ -223,6 +223,8 @@ export const de = {
     "Der Entwurf hat noch keine Fragen. Bitte im Designer mindestens eine Frage anlegen.",
   "forms.errorRecipientInvalid":
     "„{address}“ ist keine gültige E-Mail-Adresse.",
+  "forms.errorRecipientDomainNotAllowed":
+    "„{address}“ gehört zu keiner erlaubten Empfänger-Domain. Einsendungen dürfen nicht an private Postfächer gehen; weitere Domains gibt ein Super Admin in den Einstellungen frei.",
   "forms.errorTooManyRecipients":
     "Höchstens {maxRecipients} Empfänger sind möglich.",
   "forms.errorForbidden":
@@ -238,6 +240,11 @@ export const de = {
     "Nur Seiten dieser Adressen dürfen Formulare einbetten und absenden. Eine Adresse pro Zeile, mit https:// und ohne Pfad, z. B. https://www.drk-rostock.de. Höchstens {maxOrigins}.",
   "settings.originsNone":
     "Keine Website ist erlaubt. Eingebettete Formulare lassen sich nirgends laden.",
+  "settings.recipientDomains": "Erlaubte Empfänger-Domains",
+  "settings.recipientDomainsHint":
+    "Formulare senden nur an Adressen dieser Domains, damit Einsendungen nicht in private Postfächer gehen. Eine Domain pro Zeile, z. B. drk-rostock.de. Eine Subdomain wie kv.drk-rostock.de braucht eine eigene Zeile. Höchstens {maxDomains}.",
+  "settings.recipientDomainsNone":
+    "Keine Domain ist erlaubt. Formulare können keine Empfänger speichern und versenden keine E-Mails.",
   "settings.loadRateLimit": "Aufrufe pro Minute und IP-Adresse",
   "settings.loadRateLimitHint":
     "So oft darf eine IP-Adresse pro Minute ein Formular laden. Darüber erhält sie „Zu viele Versuche“.",
@@ -250,6 +257,10 @@ export const de = {
     "„{origin}“ ist keine gültige Website-Adresse. Bitte nur http:// oder https://, den Domainnamen und optional einen Port angeben, ohne Pfad.",
   "settings.errorTooManyOrigins":
     "Höchstens {maxOrigins} erlaubte Websites sind möglich.",
+  "settings.errorRecipientDomainInvalid":
+    "„{domain}“ ist keine gültige Domain. Bitte nur den Domainnamen angeben, z. B. drk-rostock.de, ohne https:// und ohne den Teil vor dem @.",
+  "settings.errorTooManyRecipientDomains":
+    "Höchstens {maxDomains} erlaubte Empfänger-Domains sind möglich.",
   "settings.errorLoadRateLimitInvalid":
     "Bitte für die Aufrufe eine ganze Zahl von {min} bis {max} eingeben.",
   "settings.errorSubmitRateLimitInvalid":
@@ -393,6 +404,8 @@ export const de = {
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
   "audit.action.settingsOriginsChanged": "Erlaubte Websites geändert",
+  "audit.action.settingsRecipientDomainsChanged":
+    "Erlaubte Empfänger-Domains geändert",
   "audit.action.settingsLoadLimitChanged": "Aufruf-Limit geändert",
   "audit.action.settingsSubmitLimitChanged": "Einsende-Limit geändert",
   "audit.summary.settingsLoadLimit": "{from} → {to} pro Minute und IP",

@@ -66,6 +66,7 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
     status: "queued",
     senderDisplayName: "DRK Kurse",
     replyToQuestion: null,
+    allowedRecipientDomains: ["drk-rostock.de"],
     ...overrides,
   };
   const sent: Mail[] = [];
@@ -299,6 +300,31 @@ describe("handleDispatchEmail", () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "no_recipients" });
     expect(sent).toEqual([]);
+  });
+
+  it("sends only to recipients on an allowed domain", async () => {
+    const { deps, sent } = fakes({
+      recipients: ["kurse@drk-rostock.de", "erika@gmail.com"],
+    });
+
+    const response = await handleDispatchEmail(deliver(await message()), deps);
+
+    expect(response.status).toBe(200);
+    expect(sent[0].to).toEqual(["kurse@drk-rostock.de"]);
+  });
+
+  it("answers 422 without sending when no recipient is on an allowed domain", async () => {
+    const { deps, sent, statuses } = fakes({
+      recipients: ["kurse@drk-rostock.de", "erika@gmail.com"],
+      allowedRecipientDomains: ["kv.drk-rostock.de"],
+    });
+
+    const response = await handleDispatchEmail(deliver(await message()), deps);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "recipients_not_allowed" });
+    expect(sent).toEqual([]);
+    expect(statuses.size).toBe(0);
   });
 
   it("answers 422 for a version whose email template cannot be read", async () => {

@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms and the global settings (tickets 04-10, 20). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings and allowed recipient domains (tickets 04-10, 20, 21). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 34 of 34 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 35 of 35 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -36,6 +36,10 @@ insert into public.team_members (team_id, user_id, role) values
 insert into public.forms (id, team_id, name) values
   ('00000000-0000-4000-8000-0000000000f1', '00000000-0000-4000-8000-0000000000a1', 'RLS-Check Formular A'),
   ('00000000-0000-4000-8000-0000000000f2', '00000000-0000-4000-8000-0000000000b1', 'RLS-Check Formular B');
+
+-- The test recipients' domain, so recipients can be saved (checks 22, 23).
+update public.settings
+set allowed_recipient_domains = array_append(allowed_recipient_domains, 'example.invalid');
 
 -- As Member A ---------------------------------------------------------------
 set local role authenticated;
@@ -123,6 +127,14 @@ begin
   if changed <> 0 then
     raise exception 'RLS check 22 failed: Member A changed team B''s recipients';
   end if;
+
+  -- 35. A recipient outside the allowed recipient domains is refused.
+  begin
+    update public.forms set recipients = '{rls-check@private-mailbox.invalid}'
+    where id = '00000000-0000-4000-8000-0000000000f1';
+    raise exception 'RLS check 35 failed: Member A saved a recipient outside the allowed domains';
+  exception when sqlstate 'HF006' then null;
+  end;
 
   -- 26. A member saves the draft (questions and email template) of their own
   -- team's forms, stamped with who and when, and of no other team's.
@@ -366,6 +378,11 @@ begin
   if changed <> 0 then
     raise exception 'RLS check 33 failed: the Team Admin changed the allowed origins';
   end if;
+  update public.settings set allowed_recipient_domains = '{private-mailbox.invalid}';
+  get diagnostics changed = row_count;
+  if changed <> 0 then
+    raise exception 'RLS check 33 failed: the Team Admin changed the allowed recipient domains';
+  end if;
 end $$;
 
 -- As the Super Admin (member of no team) --------------------------------------
@@ -510,6 +527,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 34 of 34 checks' as result;
+select 'RLS checklist passed: 35 of 35 checks' as result;
 
 rollback;

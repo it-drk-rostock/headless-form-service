@@ -11,7 +11,7 @@ export type ParsedRecipients =
 /**
  * The recipient list as typed: one address per line, or separated by commas
  * or semicolons. Addresses are normalised and kept once each, in order.
- * Allowed recipient domains are checked separately (ticket 21).
+ * The database checks them against the allowed recipient domains.
  */
 export function parseRecipients(input: string): ParsedRecipients {
   const recipients = [

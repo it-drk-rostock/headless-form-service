@@ -312,6 +312,11 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 34 failed/);
   });
 
+  it("catches recipients outside the allowed recipient domains", async () => {
+    await db.exec("drop trigger forms_check_recipient_domains on public.forms");
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 35 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);

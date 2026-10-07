@@ -57,6 +57,7 @@ Deno.serve((request) =>
           status: DispatchedSubmission["status"];
           sender_display_name: string;
           reply_to_question: string | null;
+          allowed_recipient_domains: string[];
         }>();
       if (error) throw error;
       return data === null
@@ -70,6 +71,7 @@ Deno.serve((request) =>
             status: data.status,
             senderDisplayName: data.sender_display_name,
             replyToQuestion: data.reply_to_question,
+            allowedRecipientDomains: data.allowed_recipient_domains,
           };
     },
     send,

@@ -40,6 +40,8 @@ export type FormActionState = {
 // The database refuses with "insufficient_privilege" when RLS rejects a write.
 const INSUFFICIENT_PRIVILEGE = "42501";
 const DRAFT_WITHOUT_QUESTIONS = "HF003"; // raised by public.publish_form()
+// Raised by private.check_recipient_domains(), with the address as detail.
+const RECIPIENT_DOMAIN_NOT_ALLOWED = "HF006";
 
 /**
  * Creates a form for one of the person's teams and opens it. Any member of
@@ -110,6 +112,13 @@ export async function updateFormSettings(
     })
     .eq("id", id)
     .select("id");
+  // Members cannot read the allowed recipient domains, so the database checks.
+  if (error?.code === RECIPIENT_DOMAIN_NOT_ALLOWED) {
+    return {
+      error: "forms.errorRecipientDomainNotAllowed",
+      address: error.details,
+    };
+  }
   if (error) return { error: writeError(error) };
   // RLS hides rows the person may not change, so nothing matched.
   if (data.length === 0) return { error: "forms.errorForbidden" };

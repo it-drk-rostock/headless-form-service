@@ -10,9 +10,12 @@ export async function getSettings(): Promise<GlobalSettings | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("settings")
-    .select("allowed_origins, load_rate_limit, submit_rate_limit")
+    .select(
+      "allowed_origins, allowed_recipient_domains, load_rate_limit, submit_rate_limit",
+    )
     .maybeSingle<{
       allowed_origins: string[];
+      allowed_recipient_domains: string[];
       load_rate_limit: number;
       submit_rate_limit: number;
     }>();
@@ -21,6 +24,7 @@ export async function getSettings(): Promise<GlobalSettings | null> {
     ? null
     : {
         allowedOrigins: data.allowed_origins,
+        allowedRecipientDomains: data.allowed_recipient_domains,
         loadRateLimit: data.load_rate_limit,
         submitRateLimit: data.submit_rate_limit,
       };

@@ -9,6 +9,7 @@ import {
   replyToAddress,
   senderName,
 } from "../../../lib/shared/notification.ts";
+import { splitByAllowedDomain } from "../../../lib/shared/recipient-domains.ts";
 import type { Mail } from "../_shared/mailjet.ts";
 import {
   type EncryptedSubmission,
@@ -32,6 +33,8 @@ export type DispatchedSubmission = {
   senderDisplayName: string;
   /** The question whose answer becomes Reply-To, if the form has one. */
   replyToQuestion: string | null;
+  /** The global list as it is now; recipients elsewhere get nothing. */
+  allowedRecipientDomains: string[];
 };
 
 export type DispatchEmailDeps = {
@@ -110,6 +113,20 @@ async function dispatch(
     console.error(`dispatch-email: form ${ids.formId} has no recipients`);
     return reply({ error: "no_recipients" }, 422);
   }
+  // The dashboard and the database refuse other recipients, but the list may
+  // have shrunk since the form was saved (defence in depth, ticket 21).
+  const recipients = splitByAllowedDomain(
+    submission.recipients,
+    submission.allowedRecipientDomains,
+  );
+  if (recipients.refused.length > 0) {
+    console.error(
+      `dispatch-email: form ${ids.formId} has ${recipients.refused.length} recipient(s) outside the allowed domains, not sent to`,
+    );
+  }
+  if (recipients.allowed.length === 0) {
+    return reply({ error: "recipients_not_allowed" }, 422);
+  }
   const template = parseEmailTemplate(submission.template);
   if (template === null) {
     console.error(
@@ -133,7 +150,7 @@ async function dispatch(
         email: deps.senderEmail,
         name: senderName(submission.senderDisplayName),
       },
-      to: submission.recipients,
+      to: recipients.allowed,
       ...(replyTo ? { replyTo } : {}),
       subject,
       html,

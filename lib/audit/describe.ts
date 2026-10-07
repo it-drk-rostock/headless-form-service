@@ -81,6 +81,10 @@ const actions: Record<
     label: t("audit.action.settingsOriginsChanged"),
     summary: (d) => listChanges(texts(d.from), texts(d.to)),
   },
+  "settings.recipient_domains_changed": {
+    label: t("audit.action.settingsRecipientDomainsChanged"),
+    summary: (d) => listChanges(texts(d.from), texts(d.to)),
+  },
   "settings.load_limit_changed": {
     label: t("audit.action.settingsLoadLimitChanged"),
     summary: (d) =>

@@ -6,14 +6,17 @@ import type { MessageKey } from "../i18n/index.ts";
 import { createClient } from "../supabase/server.ts";
 import { parseAllowedOrigins } from "./origins.ts";
 import { parseRateLimit } from "./rate-limits.ts";
+import { parseRecipientDomains } from "./recipient-domains.ts";
 
 /**
- * `origin` fills the `{origin}` placeholder of the message. `savedAt`
+ * `origin` and `domain` fill the `{origin}` and `{domain}` placeholders of
+ * the message. `savedAt`
  * changes on every successful save, so the form can say so.
  */
 export type SettingsActionState = {
   error: MessageKey | null;
   origin?: string;
+  domain?: string;
   savedAt?: number;
 };
 
@@ -21,8 +24,10 @@ export type SettingsActionState = {
 const INSUFFICIENT_PRIVILEGE = "42501";
 
 /**
- * Saves the allowed origins and both rate limits. `/load-form` and
- * `/submit-form` read them on every request, so they apply at once. The
+ * Saves the allowed origins, the allowed recipient domains and both rate
+ * limits. `/load-form`, `/submit-form` and `/dispatch-email` read them on
+ * every request, and the database checks recipients against the domains
+ * whenever a form's list changes, so they apply at once. The
  * database records each change in the audit log, in the same transaction.
  */
 export async function updateSettings(
@@ -33,6 +38,10 @@ export async function updateSettings(
     String(formData.get("allowedOrigins") ?? ""),
   );
   if ("error" in origins) return origins;
+  const recipientDomains = parseRecipientDomains(
+    String(formData.get("allowedRecipientDomains") ?? ""),
+  );
+  if ("error" in recipientDomains) return recipientDomains;
   const loadRateLimit = parseRateLimit(
     String(formData.get("loadRateLimit") ?? ""),
   );
@@ -53,6 +62,7 @@ export async function updateSettings(
     .from("settings")
     .update({
       allowed_origins: origins.origins,
+      allowed_recipient_domains: recipientDomains.domains,
       load_rate_limit: loadRateLimit,
       submit_rate_limit: submitRateLimit,
     })

@@ -164,6 +164,21 @@ describe("describeAuditEntry", () => {
     });
   });
 
+  it("shows which allowed recipient domains were added and removed", () => {
+    expect(
+      describeAuditEntry({
+        action: "settings.recipient_domains_changed",
+        details: {
+          from: ["drk-rostock.de", "gmail.com"],
+          to: ["drk-rostock.de", "kv.drk-rostock.de"],
+        },
+      }),
+    ).toEqual({
+      action: "Erlaubte Empfänger-Domains geändert",
+      summary: "+ kv.drk-rostock.de, − gmail.com",
+    });
+  });
+
   it("shows an emptied origin list", () => {
     expect(
       describeAuditEntry({
