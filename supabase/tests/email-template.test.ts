@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  DEFAULT_STANDARD_BODY,
   EMAIL_BODY_MAX_LENGTH,
   EMAIL_SUBJECT_MAX_LENGTH,
 } from "../../lib/forms/email-template.ts";
@@ -57,6 +58,15 @@ async function draft() {
   return rows[0];
 }
 
+describe("a new form's email template", () => {
+  it("is the Standard Layout with the default body", async () => {
+    expect((await draft()).draft_email_template).toMatchObject({
+      mode: "standard",
+      body: DEFAULT_STANDARD_BODY,
+    });
+  });
+});
+
 describe("saving the email template", () => {
   it("stores the template in the draft, stamped with who saved it", async () => {
     await commitAs(db, { userId: max }, SAVE, [form, TEMPLATE]);
@@ -65,6 +75,17 @@ describe("saving the email template", () => {
       draft_email_template: TEMPLATE,
       draft_updated_by: max,
     });
+  });
+
+  it("stores a Custom HTML Template", async () => {
+    const custom = {
+      mode: "custom",
+      subject: "Anmeldung",
+      body: "<!doctype html><html><body>{{answers_table}}</body></html>",
+    };
+    await commitAs(db, { userId: max }, SAVE, [form, custom]);
+
+    expect((await draft()).draft_email_template).toEqual(custom);
   });
 
   it("is not possible for another team's member", async () => {

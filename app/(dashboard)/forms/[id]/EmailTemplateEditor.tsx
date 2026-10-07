@@ -9,9 +9,12 @@ import {
   Group,
   Input,
   Menu,
+  Modal,
+  SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
+  Textarea,
   TextInput,
 } from "@mantine/core";
 import { Link, RichTextEditor } from "@mantine/tiptap";
@@ -20,15 +23,17 @@ import {
   IconBraces,
   IconInfoCircle,
   IconTable,
+  IconTrash,
 } from "@tabler/icons-react";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   type DraftSaveResult,
   saveEmailTemplate,
 } from "@/lib/forms/actions.ts";
 import {
+  DEFAULT_STANDARD_BODY,
   EMAIL_BODY_MAX_LENGTH,
   EMAIL_SUBJECT_MAX_LENGTH,
 } from "@/lib/forms/email-template.ts";
@@ -37,11 +42,14 @@ import {
   ANSWERS_TABLE,
   answerPlaceholders,
   type EmailTemplate,
+  type EmailTemplateMode,
   FORM_NAME,
   fitsSubject,
+  isEmailTemplateMode,
   knownPlaceholders,
   placeholderText,
   SUBMITTED_AT,
+  standardLayoutHtml,
   unknownPlaceholders,
 } from "@/lib/shared/notification.ts";
 import { FormError } from "../../../_components/FormError.tsx";
@@ -59,10 +67,12 @@ const SAVE_DELAY_MS = 800;
 const RETRY_DELAY_MS = 5000;
 
 /**
- * The email editor (blueprint §5.2): the subject and the Standard Layout's
- * body of the draft's email template, with the draft's questions to insert
- * as placeholders and a preview through the shared renderer. Every change is
- * saved shortly after it is made; concurrent saves are last-write-wins.
+ * The email editor (blueprint §5.2): the subject and the body of the draft's
+ * email template, with the draft's questions to insert as placeholders and a
+ * preview through the shared renderer. The body is the Standard Layout's,
+ * edited visually, or a Custom HTML Template's whole email, edited as code.
+ * Every change is saved shortly after it is made; concurrent saves are
+ * last-write-wins.
  */
 export function EmailTemplateEditor({
   formId,
@@ -74,17 +84,33 @@ export function EmailTemplateEditor({
   initialTemplate: EmailTemplate;
 }) {
   const { schema, setStamp, setUnsaved } = useDraftStatus();
+  const [mode, setMode] = useState(initialTemplate.mode);
   const [subject, setSubject] = useState(initialTemplate.subject);
   const [body, setBody] = useState(initialTemplate.body);
   const [result, setResult] = useState<DraftSaveResult | null>(null);
-  const template: EmailTemplate = { mode: "standard", subject, body };
+  const [confirmingStandard, setConfirmingStandard] = useState(false);
+  const template: EmailTemplate = { mode, subject, body };
   const unknown = unknownPlaceholders(template, schema);
 
   // Where *Platzhalter einfügen* inserts: the field last focused, and the
-  // cursor in the subject when it left it.
+  // cursor in the subject or the HTML when it left it.
   const target = useRef<"subject" | "body">("body");
   const subjectInput = useRef<HTMLInputElement>(null);
   const subjectCursor = useRef<number | null>(null);
+  const htmlInput = useRef<HTMLTextAreaElement>(null);
+  const htmlCursor = useRef<number | null>(null);
+  // Set when an insert moved the cursor, which writing the value resets.
+  const restoreHtmlCursor = useRef(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once the inserted HTML is written.
+  useLayoutEffect(() => {
+    if (!restoreHtmlCursor.current || htmlCursor.current === null) return;
+    restoreHtmlCursor.current = false;
+    htmlInput.current?.setSelectionRange(
+      htmlCursor.current,
+      htmlCursor.current,
+    );
+  }, [body]);
 
   // The placeholders the body highlights as known, read by the editor's
   // decorations on every redraw.
@@ -144,7 +170,12 @@ export function EmailTemplateEditor({
         unknownTitle: t("forms.emailUnknownTitle"),
       }),
     ],
-    content: initialTemplate.body,
+    // A Custom HTML Template is no Standard Layout body. While the HTML is
+    // edited, the editor keeps the Standard Layout body to switch back to.
+    content:
+      initialTemplate.mode === "standard"
+        ? initialTemplate.body
+        : DEFAULT_STANDARD_BODY,
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       setBody(html);
@@ -175,6 +206,35 @@ export function EmailTemplateEditor({
     change({ ...latest.current, subject: next });
   }
 
+  function changeHtml(next: string) {
+    setBody(next);
+    change({ ...latest.current, body: next });
+  }
+
+  function switchMode(next: EmailTemplateMode) {
+    if (next === mode) return;
+    if (next === "standard") {
+      // It discards the HTML, so it asks first.
+      setConfirmingStandard(true);
+      return;
+    }
+    // The HTML starts as the email the Standard Layout sends.
+    htmlCursor.current = null;
+    applyMode("custom", standardLayoutHtml(body));
+  }
+
+  function switchToStandard() {
+    setConfirmingStandard(false);
+    applyMode("standard", editor?.getHTML() ?? DEFAULT_STANDARD_BODY);
+  }
+
+  function applyMode(next: EmailTemplateMode, nextBody: string) {
+    setMode(next);
+    setBody(nextBody);
+    target.current = "body";
+    change({ ...latest.current, mode: next, body: nextBody });
+  }
+
   function insert(name: string) {
     const placeholder = placeholderText(name);
     if (target.current === "subject" && fitsSubject(name)) {
@@ -182,6 +242,16 @@ export function EmailTemplateEditor({
       changeSubject(subject.slice(0, at) + placeholder + subject.slice(at));
       subjectCursor.current = at + placeholder.length;
       subjectInput.current?.focus();
+      return;
+    }
+    if (mode === "custom") {
+      // The author's HTML: the answers table goes wherever they put it.
+      const at = htmlCursor.current ?? body.length;
+      const after = at + placeholder.length;
+      changeHtml(body.slice(0, at) + placeholder + body.slice(at));
+      htmlCursor.current = after;
+      restoreHtmlCursor.current = true;
+      htmlInput.current?.focus();
       return;
     }
     if (!editor) return;
@@ -231,8 +301,58 @@ export function EmailTemplateEditor({
         </Box>
       )}
 
+      <Modal
+        opened={confirmingStandard}
+        onClose={() => setConfirmingStandard(false)}
+        title={t("forms.emailSwitchStandardTitle")}
+        closeButtonProps={{ "aria-label": t("forms.close") }}
+        centered
+      >
+        <Stack gap="sm">
+          <Text fz="sm">{t("forms.emailSwitchStandardText")}</Text>
+          <Group justify="flex-end" gap="xs" mt="xs">
+            <Button
+              variant="default"
+              onClick={() => setConfirmingStandard(false)}
+            >
+              {t("forms.cancel")}
+            </Button>
+            <Button
+              color="red"
+              leftSection={<IconTrash size={16} stroke={1.5} />}
+              onClick={switchToStandard}
+            >
+              {t("forms.emailSwitchStandardSubmit")}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="xl">
         <Stack gap="md">
+          <Input.Wrapper
+            label={t("forms.emailMode")}
+            description={t(
+              mode === "standard"
+                ? "forms.emailModeStandardHint"
+                : "forms.emailModeCustomHint",
+            )}
+          >
+            <SegmentedControl
+              display="flex"
+              w="fit-content"
+              mt={4}
+              value={mode}
+              onChange={(value) => {
+                if (isEmailTemplateMode(value)) switchMode(value);
+              }}
+              data={[
+                { value: "standard", label: t("forms.emailModeStandard") },
+                { value: "custom", label: t("forms.emailModeCustom") },
+              ]}
+            />
+          </Input.Wrapper>
+
           <TextInput
             ref={subjectInput}
             label={t("forms.emailSubject")}
@@ -258,9 +378,49 @@ export function EmailTemplateEditor({
             }}
           />
 
+          {mode === "custom" && (
+            <Input.Wrapper
+              label={t("forms.emailHtml")}
+              description={t("forms.emailHtmlHint")}
+            >
+              <Group justify="flex-end" mt={4} mb={6}>
+                <PlaceholderMenu schema={schema} onInsert={insert} />
+              </Group>
+              <Textarea
+                ref={htmlInput}
+                aria-label={t("forms.emailHtml")}
+                value={body}
+                maxLength={EMAIL_BODY_MAX_LENGTH}
+                autosize
+                minRows={16}
+                maxRows={32}
+                spellCheck={false}
+                autoCapitalize="off"
+                autoCorrect="off"
+                // Orange like the subject when it has unknown placeholders.
+                classNames={{
+                  input: `${classes.htmlInput} ${unknown.body.length > 0 ? classes.unknownInput : ""}`,
+                }}
+                onChange={(event) => {
+                  htmlCursor.current = event.currentTarget.selectionStart;
+                  changeHtml(event.currentTarget.value);
+                }}
+                onFocus={() => {
+                  target.current = "body";
+                }}
+                onSelect={(event) => {
+                  htmlCursor.current = event.currentTarget.selectionStart;
+                }}
+              />
+            </Input.Wrapper>
+          )}
+
+          {/* Hidden, not unmounted, for Custom HTML: it keeps the Standard
+              Layout body to switch back to. */}
           <Input.Wrapper
             label={t("forms.emailBody")}
             description={t("forms.emailBodyHint")}
+            display={mode === "standard" ? undefined : "none"}
           >
             <RichTextEditor editor={editor} labels={editorLabels()} mt={4}>
               <RichTextEditor.Toolbar>

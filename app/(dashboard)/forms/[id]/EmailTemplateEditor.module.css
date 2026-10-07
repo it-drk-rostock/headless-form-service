@@ -22,5 +22,12 @@
 }
 
 .unknownInput {
-  border-color: var(--mantine-color-orange-6);
+  /* Mantine draws an input's border from this variable. */
+  --input-bd: var(--mantine-color-orange-6);
+}
+
+.htmlInput {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 12px;
+  line-height: 1.5;
 }

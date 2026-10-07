@@ -6,6 +6,7 @@ import {
   formatSubmittedAt,
   parseEmailTemplate,
   renderNotificationEmail,
+  standardLayoutHtml,
   unknownPlaceholders,
 } from "./notification.ts";
 
@@ -405,10 +406,81 @@ describe("standard layout", () => {
       },
     );
 
-    expect(html).toMatch(/^<!doctype html><html lang="de">/);
+    expect(html).toMatch(/^<!doctype html>\s*<html lang="de">/);
     expect(html).toContain("DRK Rostock");
     expect(html).toContain("#E60005");
     expect(html).toContain("<p>Inhalt</p>");
+  });
+});
+
+describe("custom HTML", () => {
+  const context = {
+    formName: `Kurs & "Anmeldung"`,
+    submittedAt: SUBMITTED_AT,
+    schema: page({ type: "text", name: "vorname", title: "Vorname" }),
+    answers: { vorname: `<b>Erika</b>" onclick="x` },
+  };
+
+  it("uses the author's HTML as it is, without the Standard Layout", () => {
+    const body =
+      '<html><body style="color:red"><h1>Neu</h1><p>{{answers_table}}</p></body></html>';
+    const { html } = renderNotificationEmail(
+      {
+        mode: "custom",
+        subject: "",
+        body: body.replace("Neu", "Neu am {{submitted_at}}"),
+      },
+      context,
+    );
+
+    expect(html).toBe(
+      `<html><body style="color:red"><h1>Neu am 06.10.2026, 14:30</h1><p>${answersTable(context.schema, context.answers)}</p></body></html>`,
+    );
+    expect(html).not.toContain("DRK Rostock");
+  });
+
+  it("escapes every inserted value, in text and in attributes", () => {
+    const { subject, html } = renderNotificationEmail(
+      {
+        mode: "custom",
+        subject: "{{form.name}}: {{answers.vorname}}",
+        body: '<a title="{{answers.vorname}}">{{form.name}}</a>',
+      },
+      context,
+    );
+
+    expect(subject).toBe(`Kurs & "Anmeldung": <b>Erika</b>" onclick="x`);
+    expect(html).toBe(
+      '<a title="&lt;b&gt;Erika&lt;/b&gt;&quot; onclick=&quot;x">Kurs &amp; &quot;Anmeldung&quot;</a>',
+    );
+  });
+
+  it("leaves placeholders it does not know untouched", () => {
+    const { html } = renderNotificationEmail(
+      { mode: "custom", subject: "", body: "<p>{{pass.ticket}}</p>" },
+      context,
+    );
+
+    expect(html).toBe("<p>{{pass.ticket}}</p>");
+  });
+
+  it("starts from the Standard Layout, rendering as the standard template did", () => {
+    const standard = {
+      mode: "standard" as const,
+      subject: "Neu: {{form.name}}",
+      body: "<p>Hallo {{answers.vorname}},</p><p>{{answers_table}}</p>",
+    };
+
+    expect(
+      renderNotificationEmail(
+        {
+          ...standard,
+          mode: "custom",
+          body: standardLayoutHtml(standard.body),
+        },
+        context,
+      ),
+    ).toEqual(renderNotificationEmail(standard, context));
   });
 });
 
@@ -501,6 +573,13 @@ describe("parseEmailTemplate", () => {
     expect(
       parseEmailTemplate({ mode: "standard", subject: "S", body: "<p>B</p>" }),
     ).toEqual({ mode: "standard", subject: "S", body: "<p>B</p>" });
+    expect(
+      parseEmailTemplate({
+        mode: "custom",
+        subject: "S",
+        body: "<html></html>",
+      }),
+    ).toEqual({ mode: "custom", subject: "S", body: "<html></html>" });
   });
 
   it.each([

@@ -88,6 +88,20 @@ export const de = {
   "forms.draftSavedBy": "Entwurf gespeichert am {at} von {by}",
   "forms.emailHint":
     "Änderungen werden automatisch im Entwurf gespeichert. Empfänger erhalten die neue Vorlage erst nach dem Veröffentlichen.",
+  "forms.emailMode": "Vorlage",
+  "forms.emailModeStandard": "Standard-Layout",
+  "forms.emailModeCustom": "Eigenes HTML",
+  "forms.emailModeStandardHint":
+    "Das Layout des DRK Rostock, gestaltet wird nur der Inhalt.",
+  "forms.emailModeCustomHint":
+    "Die ganze E-Mail als eigenes HTML. Eingefügte Werte werden immer maskiert.",
+  "forms.emailHtml": "HTML",
+  "forms.emailHtmlHint":
+    "Wird so versendet, wie es hier steht; nur die Platzhalter werden ersetzt.",
+  "forms.emailSwitchStandardTitle": "Zum Standard-Layout wechseln?",
+  "forms.emailSwitchStandardText":
+    "Das eigene HTML wird verworfen. Im Standard-Layout steht wieder der Inhalt von vor dem Wechsel, nach einem Neuladen der Seite der Standardinhalt.",
+  "forms.emailSwitchStandardSubmit": "HTML verwerfen und wechseln",
   "forms.emailSubject": "Betreff",
   "forms.emailSubjectHint": "Reiner Text, höchstens {max} Zeichen.",
   "forms.emailBody": "Inhalt",

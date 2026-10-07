@@ -10,6 +10,14 @@ import { isObject } from "../shared/object.ts";
 export const EMAIL_SUBJECT_MAX_LENGTH = 250;
 export const EMAIL_BODY_MAX_LENGTH = 100_000;
 
+/**
+ * The Standard Layout body of a new form's draft: a greeting and the answers
+ * table. Same as the `draft_email_template` default of the form_versions
+ * migration.
+ */
+export const DEFAULT_STANDARD_BODY =
+  "<p>Hallo,</p><p>über das Formular „{{form.name}}“ ist am {{submitted_at}} eine neue Einsendung eingegangen:</p>{{answers_table}}";
+
 /** Why `value` cannot be saved as the draft's email template, or null if it can. */
 export function emailTemplateProblem(value: unknown): MessageKey | null {
   const template = parseEmailTemplate(value);

@@ -25,10 +25,12 @@ export function EmailPreview({
 }) {
   const [submittedAt] = useState(() => new Date());
   // Rendering waits for typing to pause, so the editor stays responsive.
+  // The mode too: a body is only ever rendered in its own mode.
+  const deferredMode = useDeferredValue(template.mode);
   const deferredSubject = useDeferredValue(template.subject);
   const deferredBody = useDeferredValue(template.body);
   const { subject, html } = renderNotificationEmail(
-    { ...template, subject: deferredSubject, body: deferredBody },
+    { mode: deferredMode, subject: deferredSubject, body: deferredBody },
     { formName, submittedAt, schema, answers: sampleAnswers(schema) },
   );
 

@@ -3,8 +3,9 @@
 //
 // The shared renderer of notification emails (blueprint §5): the dispatcher
 // sends what it renders, and the email editor's preview shows the same, so
-// the two cannot drift apart. The template's own HTML is trusted;
-// every value inserted into it is escaped.
+// the two cannot drift apart. The template's own HTML is trusted, a Custom
+// HTML Template's as much as the Standard Layout's; every value inserted into
+// it is escaped.
 import {
   type Answers,
   COMMENT_SUFFIX,
@@ -15,11 +16,27 @@ import { isObject } from "./object.ts";
 
 /** A form version's `email_template` (blueprint §5.2). */
 export type EmailTemplate = {
-  mode: "standard";
+  mode: EmailTemplateMode;
   subject: string;
-  /** HTML. */
+  /**
+   * HTML: the Standard Layout's body, or the whole email of a Custom HTML
+   * Template.
+   */
   body: string;
 };
+
+export type EmailTemplateMode = "standard" | "custom";
+
+const MODES: readonly string[] = [
+  "standard",
+  "custom",
+] satisfies EmailTemplateMode[];
+
+export function isEmailTemplateMode(
+  value: unknown,
+): value is EmailTemplateMode {
+  return typeof value === "string" && MODES.includes(value);
+}
 
 /** What a template's placeholders are filled from. */
 export type NotificationContext = {
@@ -40,13 +57,17 @@ export type RenderedEmail = {
 export function parseEmailTemplate(value: unknown): EmailTemplate | null {
   if (
     !isObject(value) ||
-    value.mode !== "standard" ||
+    !isEmailTemplateMode(value.mode) ||
     typeof value.subject !== "string" ||
     typeof value.body !== "string"
   ) {
     return null;
   }
-  return { mode: value.mode, subject: value.subject, body: value.body };
+  return {
+    mode: value.mode,
+    subject: value.subject,
+    body: value.body,
+  };
 }
 
 /** The placeholders every template knows, besides the answers' (blueprint §5.1). */
@@ -79,6 +100,8 @@ const ANSWERS_TABLE_PARAGRAPH = /<p>\s*\{\{\s*answers_table\s*\}\}\s*<\/p>/g;
  * `{{answers_table}}`. Other placeholders (e.g. `{{pass.*}}` until ticket 28,
  * or a question a later version renamed) stay as they are. The subject is
  * plain text, so its values are not escaped and it has no answers table.
+ * A Standard Layout body is wrapped in the layout; a Custom HTML Template is
+ * the whole email as its author wrote it.
  */
 export function renderNotificationEmail(
   template: EmailTemplate,
@@ -103,12 +126,10 @@ export function renderNotificationEmail(
   )
     .replace(/\s+/g, " ")
     .trim();
-  // A table can't sit inside a paragraph, so it takes the paragraph's place.
-  const body = fillPlaceholders(
-    template.body.replace(
-      ANSWERS_TABLE_PARAGRAPH,
-      placeholderText(ANSWERS_TABLE),
-    ),
+  const html = fillPlaceholders(
+    template.mode === "standard"
+      ? standardLayoutHtml(template.body)
+      : template.body,
     (written) => {
       const name = bodyName(written);
       if (name === ANSWERS_TABLE) {
@@ -120,7 +141,7 @@ export function renderNotificationEmail(
         : escapeHtml(text).replaceAll("\n", "<br>");
     },
   );
-  return { subject, html: standardLayout(body) };
+  return { subject, html };
 }
 
 /**
@@ -221,13 +242,45 @@ export function findPlaceholders(text: string): FoundPlaceholder[] {
 const FONT = "Arial,Helvetica,sans-serif";
 
 /**
- * The DRK Rostock-branded Standard Layout around the body (blueprint §5.2):
- * a red header, the body on a white card, and a footer. Tables and inline
- * styles, so mail clients render it alike; at most 640px wide, narrower on
- * phones. No emblem: only official logo files may be used (ui-design §7).
+ * The DRK Rostock-branded Standard Layout around a body, its placeholders
+ * left to fill (blueprint §5.2): a red header, the body on a white card, and
+ * a footer. Tables and inline styles, so mail clients render it alike; at
+ * most 640px wide, narrower on phones. No emblem: only official logo files
+ * may be used (ui-design §7). Laid out over lines, as a Custom HTML Template
+ * starts from it.
  */
-function standardLayout(body: string): string {
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>.inhalt h2{font-size:20px;line-height:1.3;margin:0 0 12px}.inhalt h3{font-size:17px;line-height:1.3;margin:20px 0 8px}.inhalt p{margin:0 0 12px}.inhalt a{color:#E60005}.inhalt hr{border:0;border-top:1px solid #dee2e6;margin:20px 0}.inhalt ul,.inhalt ol{margin:0 0 12px;padding-left:24px}</style></head><body style="margin:0;padding:0;background:#f1f3f5"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f3f5"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #dee2e6;border-collapse:separate"><tr><td style="background:#E60005;padding:16px 24px;font-family:${FONT};font-size:18px;font-weight:bold;color:#ffffff">DRK Rostock</td></tr><tr><td class="inhalt" style="padding:24px;font-family:${FONT};font-size:15px;line-height:1.5;color:#1a1a1a">${body}</td></tr><tr><td style="padding:16px 24px;border-top:1px solid #dee2e6;font-family:${FONT};font-size:12px;line-height:1.5;color:#868e96">Diese E-Mail wurde automatisch vom Formular-Service des DRK Rostock versendet.</td></tr></table></td></tr></table></body></html>`;
+export function standardLayoutHtml(body: string): string {
+  // A table can't sit inside a paragraph, so it takes the paragraph's place.
+  const content = body.replace(
+    ANSWERS_TABLE_PARAGRAPH,
+    placeholderText(ANSWERS_TABLE),
+  );
+  return `<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+.inhalt h2{font-size:20px;line-height:1.3;margin:0 0 12px}
+.inhalt h3{font-size:17px;line-height:1.3;margin:20px 0 8px}
+.inhalt p{margin:0 0 12px}
+.inhalt a{color:#E60005}
+.inhalt hr{border:0;border-top:1px solid #dee2e6;margin:20px 0}
+.inhalt ul,.inhalt ol{margin:0 0 12px;padding-left:24px}
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f1f3f5">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f3f5"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #dee2e6;border-collapse:separate">
+<tr><td style="background:#E60005;padding:16px 24px;font-family:${FONT};font-size:18px;font-weight:bold;color:#ffffff">DRK Rostock</td></tr>
+<tr><td class="inhalt" style="padding:24px;font-family:${FONT};font-size:15px;line-height:1.5;color:#1a1a1a">
+${content}
+</td></tr>
+<tr><td style="padding:16px 24px;border-top:1px solid #dee2e6;font-family:${FONT};font-size:12px;line-height:1.5;color:#868e96">Diese E-Mail wurde automatisch vom Formular-Service des DRK Rostock versendet.</td></tr>
+</table>
+</td></tr></table>
+</body>
+</html>`;
 }
 
 export function escapeHtml(text: string): string {
