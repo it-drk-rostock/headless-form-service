@@ -12,6 +12,12 @@ import {
 } from "./draft.ts";
 import { isFormId } from "./id.ts";
 import {
+  FORM_PASS_COLUMNS,
+  type FormPass,
+  type FormPassRow,
+  toFormPass,
+} from "./passes.ts";
+import {
   CURRENT_VERSION_COLUMNS,
   type CurrentVersion,
   type CurrentVersionRow,
@@ -22,6 +28,7 @@ import {
   toFormVersion,
 } from "./publish.ts";
 import {
+  type FormAccessType,
   type FormDetails,
   type FormSummary,
   type FormsFilter,
@@ -34,6 +41,8 @@ type FormRow = {
   team_id: string;
   is_closed: boolean;
   archived_at: string | null;
+  access_type: FormAccessType;
+  page_url: string | null;
   current_version: number | null;
   recipients: string[];
   turnstile_enabled: boolean;
@@ -45,7 +54,7 @@ type FormRow = {
 };
 
 const FORM_COLUMNS =
-  "id, name, team_id, is_closed, archived_at, current_version, recipients, turnstile_enabled, reply_to_question, sender_display_name, created_at, updated_at, teams(name)";
+  "id, name, team_id, is_closed, archived_at, access_type, page_url, current_version, recipients, turnstile_enabled, reply_to_question, sender_display_name, created_at, updated_at, teams(name)";
 
 function toSummary(row: FormRow): FormSummary {
   return {
@@ -108,6 +117,8 @@ export const getForm = cache(
       senderDisplayName: data.sender_display_name,
       currentVersion: data.current_version,
       archivedAt: data.archived_at,
+      accessType: data.access_type,
+      pageUrl: data.page_url,
       createdAt: data.created_at,
     };
   },
@@ -194,4 +205,25 @@ export async function listFormVersions(id: string): Promise<FormVersion[]> {
     );
   }
   return data.map(toFormVersion);
+}
+
+/**
+ * A form's passes, newest first, with their status now. RLS shows them to
+ * the people who see the form; nobody reads their hashes.
+ */
+export async function listFormPasses(id: string): Promise<FormPass[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("form_passes")
+    .select(FORM_PASS_COLUMNS)
+    .eq("form_id", id)
+    .order("created_at", { ascending: false })
+    .overrideTypes<FormPassRow[], { merge: false }>();
+  if (error) {
+    throw new Error(
+      `Form passes of form ${id} could not be loaded: ${error.message}`,
+    );
+  }
+  const now = new Date();
+  return data.map((row) => toFormPass(row, now));
 }

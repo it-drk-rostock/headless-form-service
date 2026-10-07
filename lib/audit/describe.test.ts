@@ -248,6 +248,74 @@ describe("describeAuditEntry", () => {
     ).toEqual({ action: label, summary });
   });
 
+  it("names the new access type", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.access_changed",
+        details: { name: "Kontakt", to: "protected" },
+      }),
+    ).toEqual({ action: "Zugang geändert", summary: "Kontakt: geschützt" });
+    expect(
+      describeAuditEntry({
+        action: "form.access_changed",
+        details: { name: "Kontakt", to: "public" },
+      }).summary,
+    ).toBe("Kontakt: öffentlich");
+  });
+
+  it("shows a form page change from old to new", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.page_changed",
+        details: {
+          name: "Kontakt",
+          from: null,
+          to: "https://www.drk-rostock.de/kontakt",
+        },
+      }),
+    ).toEqual({
+      action: "Formularseite geändert",
+      summary: "Kontakt: keine → https://www.drk-rostock.de/kontakt",
+    });
+  });
+
+  it("describes a created form pass with its limits", () => {
+    expect(
+      describeAuditEntry({
+        action: "form_pass.created",
+        details: {
+          name: "Kontakt",
+          max_uses: 1,
+          expires_at: "2026-10-09T22:30:00+00:00",
+          source: "dashboard",
+        },
+      }),
+    ).toEqual({
+      action: "Pass angelegt",
+      summary: "Kontakt: 1 Nutzung(en), gültig bis 10.10.2026, 00:30",
+    });
+    expect(
+      describeAuditEntry({
+        action: "form_pass.created",
+        details: {
+          name: "Kontakt",
+          max_uses: null,
+          expires_at: null,
+          source: "n8n",
+        },
+      }).summary,
+    ).toBe("Kontakt: unbegrenzte Nutzungen, ohne Ablauf, über n8n");
+  });
+
+  it("names the form of a revoked pass", () => {
+    expect(
+      describeAuditEntry({
+        action: "form_pass.revoked",
+        details: { name: "Kontakt" },
+      }),
+    ).toEqual({ action: "Pass widerrufen", summary: "Kontakt" });
+  });
+
   it("shows actions it does not know yet as they are stored", () => {
     expect(
       describeAuditEntry({

@@ -356,6 +356,27 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 42 failed/);
   });
 
+  it("catches form passes open to other teams", async () => {
+    await db.exec(`create or replace function public.revoke_form_pass(pass uuid)
+      returns void language sql security definer set search_path = '' as $$
+        update public.form_passes set revoked_at = now() where id = pass $$`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 43 failed/);
+  });
+
+  it("catches form pass hashes members can read", async () => {
+    await db.exec(
+      "grant select (token_hash) on public.form_passes to authenticated",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 43 failed/);
+  });
+
+  it("catches form passes that are not recorded", async () => {
+    await db.exec(
+      "drop trigger form_passes_audit_revoke on public.form_passes",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 44 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);

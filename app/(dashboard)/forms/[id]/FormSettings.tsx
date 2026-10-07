@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Group,
+  SegmentedControl,
   Select,
   Stack,
   Switch,
@@ -20,8 +21,10 @@ import {
   updateFormSettings,
 } from "@/lib/forms/actions.ts";
 import { FORM_NAME_MAX_LENGTH } from "@/lib/forms/name.ts";
+import { FORM_PAGE_MAX_LENGTH } from "@/lib/forms/passes.ts";
 import { MAX_RECIPIENTS } from "@/lib/forms/recipients.ts";
 import { SENDER_NAME_MAX_LENGTH } from "@/lib/forms/sender-name.ts";
+import type { FormAccessType } from "@/lib/forms/types.ts";
 import { t } from "@/lib/i18n/index.ts";
 import {
   DEFAULT_SENDER_NAME,
@@ -39,12 +42,15 @@ type Values = {
   replyToQuestion: string;
   turnstileEnabled: boolean;
   isClosed: boolean;
+  accessType: FormAccessType;
+  pageUrl: string;
 };
 
 /**
  * The form's name, recipients, sender display name, Reply-To question, bot
- * protection and whether it is closed. *Speichern* sits top right and stays disabled until
- * something changed (ui-design §5).
+ * protection, whether it is closed, its access type and its form page.
+ * *Speichern* sits top right and stays disabled until something changed
+ * (ui-design §5).
  */
 export function FormSettings({
   id,
@@ -55,6 +61,8 @@ export function FormSettings({
   emailQuestions,
   turnstileEnabled,
   isClosed,
+  accessType,
+  pageUrl,
 }: {
   id: string;
   name: string;
@@ -65,6 +73,9 @@ export function FormSettings({
   emailQuestions: EmailQuestion[] | null;
   turnstileEnabled: boolean;
   isClosed: boolean;
+  accessType: FormAccessType;
+  /** Null while unset. */
+  pageUrl: string | null;
 }) {
   // What is stored, as the page last rendered it. A save refreshes the page,
   // so the normalised list (or another person's change) arrives here and
@@ -76,6 +87,8 @@ export function FormSettings({
     replyToQuestion: replyToQuestion ?? "",
     turnstileEnabled,
     isClosed,
+    accessType,
+    pageUrl: pageUrl ?? "",
   };
   const [shown, setShown] = useState<Values>(stored);
   const [values, setValues] = useState<Values>(stored);
@@ -253,6 +266,43 @@ export function FormSettings({
           styles={{ body: { justifyContent: "space-between", gap: 24 } }}
           mt="xs"
         />
+        <input type="hidden" name="accessType" value={values.accessType} />
+        <Group justify="space-between" wrap="nowrap" gap={24} mt="xs">
+          <Stack gap={2}>
+            <Text fz="sm" fw={500}>
+              {t("forms.access")}
+            </Text>
+            <Text fz={13} c="gray.6">
+              {t("forms.accessHint")}
+            </Text>
+          </Stack>
+          <SegmentedControl
+            size="xs"
+            aria-label={t("forms.access")}
+            value={values.accessType}
+            onChange={(value) =>
+              setValues({ ...values, accessType: value as FormAccessType })
+            }
+            data={[
+              { value: "public", label: t("forms.accessPublic") },
+              { value: "protected", label: t("forms.accessProtected") },
+            ]}
+            style={{ flexShrink: 0 }}
+          />
+        </Group>
+        <TextInput
+          name="pageUrl"
+          type="url"
+          label={t("forms.page")}
+          description={t("forms.pageHint")}
+          placeholder="https://www.drk-rostock.de/…"
+          maxLength={FORM_PAGE_MAX_LENGTH}
+          value={values.pageUrl}
+          onChange={(event) =>
+            setValues({ ...values, pageUrl: event.currentTarget.value })
+          }
+          spellCheck={false}
+        />
       </Stack>
     </Box>
   );
@@ -265,6 +315,8 @@ function sameValues(a: Values, b: Values): boolean {
     a.senderDisplayName === b.senderDisplayName &&
     a.replyToQuestion === b.replyToQuestion &&
     a.turnstileEnabled === b.turnstileEnabled &&
-    a.isClosed === b.isClosed
+    a.isClosed === b.isClosed &&
+    a.accessType === b.accessType &&
+    a.pageUrl === b.pageUrl
   );
 }

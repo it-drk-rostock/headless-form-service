@@ -11,6 +11,13 @@ export type FormSummary = {
   updatedAt: string;
 };
 
+/** Who can fill in a form (GLOSSARY: Public Form, Protected Form). */
+export type FormAccessType = "public" | "protected";
+
+export function isFormAccessType(value: unknown): value is FormAccessType {
+  return value === "public" || value === "protected";
+}
+
 /** A form with its settings, for `/forms/[id]`. */
 export type FormDetails = FormSummary & {
   /** Normalised addresses that receive the notification emails. */
@@ -27,6 +34,10 @@ export type FormDetails = FormSummary & {
   currentVersion: number | null;
   /** When the form was archived; null while in use. */
   archivedAt: string | null;
+  /** Protected forms are filled in only with a valid form pass. */
+  accessType: FormAccessType;
+  /** The form page, used to build form pass links; null while unset. */
+  pageUrl: string | null;
   createdAt: string;
 };
 
@@ -54,6 +65,7 @@ export const FORM_VIEWS = [
   "email",
   "versions",
   "settings",
+  "passes",
 ] as const;
 export type FormView = (typeof FORM_VIEWS)[number];
 

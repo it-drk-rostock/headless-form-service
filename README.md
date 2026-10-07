@@ -185,6 +185,19 @@ The *Formular geschlossen* switch in a form's settings sets `forms.is_closed`. I
 - A database trigger writes `form.archived`, `form.unarchived` and `form.deleted` to the audit log, whichever path made the change (*Formular archiviert* / *Formular aus dem Archiv geholt* / *Formular endgültig gelöscht*). The deletion entry keeps the team, so the team's Team Admins still see it.
 - Checks 40–42 of `supabase/snippets/rls-checklist-teams.sql` cover it, plus 9 and 24.
 
+### Form passes
+
+A protected form is filled in only with a form pass: a secret in the link `<form page>?form_pass=<secret>`. In a form's settings, *Zugang* switches between *Öffentlich* and *Geschützt* (`forms.access_type`), and *Formularseite* sets the form page (`forms.page_url`, an http or https address). Both are saved with the other settings. A database trigger writes `form.access_changed` and `form.page_changed` to the audit log.
+
+- The *Pässe* view of `/forms/[id]` lists a form's passes, newest first: when and by whom each was created, uses (`1 von 3`), expiry, pass metadata and status (*Gültig*, *Aufgebraucht*, *Abgelaufen*, *Widerrufen*). Secrets and hashes never show.
+- *+ Pass anlegen* is there once the form is protected and has a form page. It asks for a use limit (default 1, empty = unlimited), a validity in hours (default 48, empty = no expiry) and optional pass metadata. The dashboard makes a 256-bit secret, sends only its SHA-256 to `public.create_form_pass(form, token_hash, max_uses, expires_at, metadata)`, and shows the link once with a copy button.
+- Pass metadata is a flat object of at most 20 string or number values, each at most 500 characters, under keys of letters, digits, `_` and `-` (`lib/shared/form-pass.ts` and `private.is_pass_metadata()`). It must not hold personal data.
+- *Widerrufen* on a valid pass goes through `public.revoke_form_pass(pass)`. Revoking cannot be undone.
+- `public.form_passes` keeps the hash, use limit, use count, expiry, revocation time, source (`dashboard` or `n8n`), creator and metadata. Members of the form's team and Super Admins read every column but `token_hash` and write only through the two functions, which are open to the same people. Passes go with their form when it is deleted for good.
+- A database trigger writes `form_pass.created` (use limit, expiry, source; no hash or metadata) and `form_pass.revoked` (*Pass angelegt* / *Pass widerrufen*).
+- `/load-form` and `/submit-form` do not check passes yet: a protected form gets 403 until ticket 26.
+- Checks 43–44 of `supabase/snippets/rls-checklist-teams.sql` cover it, plus 9.
+
 ### Loading forms
 
 The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version, plus `turnstile_site_key` when the form has Turnstile on. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).

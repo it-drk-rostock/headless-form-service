@@ -1,4 +1,4 @@
-import { t } from "../i18n/index.ts";
+import { formatDateTime, t } from "../i18n/index.ts";
 import { DEFAULT_SENDER_NAME } from "../shared/notification.ts";
 import { isTeamRole } from "../teams/types.ts";
 import type { AuditEntry } from "./types.ts";
@@ -95,6 +95,51 @@ const actions: Record<
   },
   "form.deleted": {
     label: t("audit.action.formDeleted"),
+    summary: (d) => text(d.name),
+  },
+  "form.access_changed": {
+    label: t("audit.action.formAccessChanged"),
+    summary: (d) =>
+      t(
+        d.to === "protected"
+          ? "audit.summary.formAccessProtected"
+          : "audit.summary.formAccessPublic",
+        { name: text(d.name) },
+      ),
+  },
+  "form.page_changed": {
+    label: t("audit.action.formPageChanged"),
+    summary: (d) =>
+      t("audit.summary.formSettingChanged", {
+        name: text(d.name),
+        from: text(d.from) || t("audit.summary.none"),
+        to: text(d.to) || t("audit.summary.none"),
+      }),
+  },
+  "form_pass.created": {
+    label: t("audit.action.formPassCreated"),
+    summary: (d) =>
+      t(
+        d.source === "n8n"
+          ? "audit.summary.formPassCreatedN8n"
+          : "audit.summary.formPassCreated",
+        {
+          name: text(d.name),
+          uses:
+            typeof d.max_uses === "number"
+              ? t("audit.summary.formPassUses", { max: d.max_uses })
+              : t("audit.summary.formPassUnlimited"),
+          expiry:
+            typeof d.expires_at === "string"
+              ? t("audit.summary.formPassExpires", {
+                  at: formatDateTime(d.expires_at),
+                })
+              : t("audit.summary.formPassNoExpiry"),
+        },
+      ),
+  },
+  "form_pass.revoked": {
+    label: t("audit.action.formPassRevoked"),
     summary: (d) => text(d.name),
   },
   "settings.origins_changed": {

@@ -6,10 +6,16 @@ import { redirect } from "next/navigation";
 import { requireProfile } from "../auth/profile.ts";
 import type { MessageKey } from "../i18n/index.ts";
 import {
+  formPassUrl,
+  generateFormPassSecret,
+  hashFormPassSecret,
+} from "../shared/form-pass.ts";
+import {
   emailQuestions,
   normalizeSenderName,
   parseEmailTemplate,
 } from "../shared/notification.ts";
+import { isUuid } from "../shared/uuid.ts";
 import { createClient } from "../supabase/server.ts";
 import { isTeamId } from "../teams/id.ts";
 import {
@@ -23,11 +29,17 @@ import {
 import { emailTemplateProblem } from "./email-template.ts";
 import { isFormId } from "./id.ts";
 import { confirmsDeletion, formNameProblem } from "./name.ts";
+import {
+  type FormPassInput,
+  parseFormPage,
+  parseFormPassInput,
+} from "./passes.ts";
 import { changelogProblem, normalizeChangelog } from "./publish.ts";
 import { getFormDraft } from "./queries.ts";
 import { parseRecipients } from "./recipients.ts";
 import { parseReplyToQuestion } from "./reply-to.ts";
 import { senderNameProblem } from "./sender-name.ts";
+import { isFormAccessType } from "./types.ts";
 
 /**
  * `address` fills the `{address}` placeholder of the message. `savedAt`
@@ -45,6 +57,7 @@ const DRAFT_WITHOUT_QUESTIONS = "HF003"; // raised by public.publish_form()
 const VERSION_NOT_FOUND = "HF007"; // raised by public.restore_form_version()
 const NOT_YET_PUBLISHED = "HF008"; // raised by public.discard_draft_changes()
 const FORM_NOT_FOUND = "HF009"; // raised by public.delete_form()
+const FORM_NOT_PROTECTED = "HF010"; // raised by public.create_form_pass()
 // Raised by private.check_recipient_domains(), with the address as detail.
 const RECIPIENT_DOMAIN_NOT_ALLOWED = "HF006";
 
@@ -75,9 +88,9 @@ export async function createForm(
 }
 
 /**
- * Saves a form's name, recipients, sender display name, Reply-To question
- * and Turnstile switch. The database records the changes in the audit log,
- * in the same transaction.
+ * Saves a form's name, recipients, sender display name, Reply-To question,
+ * Turnstile switch, access type and form page. The database records the
+ * changes in the audit log, in the same transaction.
  */
 export async function updateFormSettings(
   _previous: FormActionState,
@@ -94,6 +107,10 @@ export async function updateFormSettings(
   );
   const senderProblem = senderNameProblem(senderName);
   if (senderProblem) return { error: senderProblem };
+  const page = parseFormPage(String(formData.get("pageUrl") ?? ""));
+  if ("error" in page) return page;
+  const accessType = formData.get("accessType");
+  if (!isFormAccessType(accessType)) return { error: "forms.errorGeneric" };
   if (!isFormId(id)) return { error: "forms.errorForbidden" };
   // An unchecked switch sends nothing.
   const turnstileEnabled = formData.get("turnstileEnabled") === "on";
@@ -118,6 +135,8 @@ export async function updateFormSettings(
       sender_display_name: senderName,
       reply_to_question: replyTo.replyToQuestion,
       turnstile_enabled: turnstileEnabled,
+      access_type: accessType,
+      page_url: page.pageUrl,
       ...(closedChanged ? { is_closed: isClosed } : {}),
     })
     .eq("id", id)
@@ -399,6 +418,80 @@ export async function deleteForm(
   if (error) return { error: writeError(error) };
 
   redirect("/forms");
+}
+
+export type FormPassCreateResult =
+  | { error: MessageKey }
+  | { error: null; url: string };
+
+/**
+ * Creates a form pass for a protected form with a form page, and returns its
+ * link. The secret is made here and shown only this once; the database
+ * keeps its hash, checks who may create passes, and records it in the audit
+ * log.
+ */
+export async function createFormPass(
+  id: string,
+  input: FormPassInput,
+): Promise<FormPassCreateResult> {
+  const parsed = parseFormPassInput(input);
+  if ("error" in parsed) return parsed;
+  if (!isFormId(id)) return { error: "forms.errorForbidden" };
+
+  await requireProfile();
+  const supabase = await createClient();
+  const { data: form, error: readError } = await supabase
+    .from("forms")
+    .select("access_type, page_url")
+    .eq("id", id)
+    .maybeSingle<{ access_type: string; page_url: string | null }>();
+  if (readError) return { error: writeError(readError) };
+  if (!form) return { error: "forms.errorForbidden" };
+  if (form.access_type !== "protected") {
+    return { error: "forms.errorPassNotProtected" };
+  }
+  if (form.page_url === null) return { error: "forms.errorPassNoPage" };
+
+  const secret = generateFormPassSecret();
+  const { error } = await supabase.rpc("create_form_pass", {
+    form: id,
+    token_hash: await hashFormPassSecret(secret),
+    max_uses: parsed.maxUses,
+    expires_at:
+      parsed.expiresInHours === null
+        ? null
+        : new Date(
+            Date.now() + parsed.expiresInHours * 3_600_000,
+          ).toISOString(),
+    metadata: parsed.metadata,
+  });
+  if (error?.code === FORM_NOT_PROTECTED) {
+    return { error: "forms.errorPassNotProtected" };
+  }
+  if (error) return { error: writeError(error) };
+
+  refresh();
+  return { error: null, url: formPassUrl(form.page_url, secret) };
+}
+
+export type FormPassRevokeResult = { error: MessageKey | null };
+
+/**
+ * Revokes a form pass for good. Members of the form's team and Super Admins
+ * may; the database checks it and records it in the audit log.
+ */
+export async function revokeFormPass(
+  passId: string,
+): Promise<FormPassRevokeResult> {
+  if (!isUuid(passId)) return { error: "forms.errorForbidden" };
+
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("revoke_form_pass", { pass: passId });
+  if (error) return { error: writeError(error) };
+
+  refresh();
+  return { error: null };
 }
 
 function writeError(error: PostgrestError): MessageKey {

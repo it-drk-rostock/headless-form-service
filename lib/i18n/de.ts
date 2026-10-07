@@ -89,6 +89,7 @@ export const de = {
   "forms.viewEmail": "E-Mail",
   "forms.viewVersions": "Versionen",
   "forms.viewSettings": "Einstellungen",
+  "forms.viewPasses": "Pässe",
   "forms.designerHint":
     "Änderungen werden automatisch im Entwurf gespeichert. Besucher sehen sie erst nach dem Veröffentlichen.",
   "forms.draftNeverSaved": "Entwurf noch nicht gespeichert",
@@ -212,6 +213,14 @@ export const de = {
   "forms.turnstile": "Bot-Schutz (Cloudflare Turnstile)",
   "forms.turnstileHint":
     "Besucher werden vor dem Absenden unauffällig geprüft, ob sie Menschen sind. Nur in Ausnahmefällen ausschalten.",
+  "forms.access": "Zugang",
+  "forms.accessHint":
+    "Ein öffentliches Formular kann jeder ausfüllen. Ein geschütztes nur, wer einen gültigen Link mit Pass hat; Pässe werden unter „Pässe“ angelegt.",
+  "forms.accessPublic": "Öffentlich",
+  "forms.accessProtected": "Geschützt",
+  "forms.page": "Formularseite",
+  "forms.pageHint":
+    "Die Seite der Website, auf der das Formular eingebettet ist. Aus ihr entstehen die Links der Pässe.",
   "forms.senderName": "Absendername",
   "forms.senderNameHint":
     "Erscheint in E-Mails zu diesem Formular neben der Absenderadresse, höchstens {max} Zeichen. Leer: „{default}“.",
@@ -234,6 +243,58 @@ export const de = {
   "forms.detailVersion": "Aktuelle Version",
   "forms.archivedNotice":
     "Archiviert am {at}. Das Formular wird nicht mehr geladen und nimmt keine Einsendungen an. Versionen und Statistik bleiben erhalten.",
+  "forms.passesTitle": "Pässe",
+  "forms.passesHint":
+    "Mit einem Pass kann ein geschütztes Formular ausgefüllt werden: über den Link aus Formularseite und Pass. Ein Pass gilt, bis er widerrufen, aufgebraucht oder abgelaufen ist.",
+  "forms.passesPublicTitle": "Öffentliches Formular",
+  "forms.passesPublicHint":
+    "Pässe braucht nur ein geschütztes Formular. Der Zugang wird in den Einstellungen geändert.",
+  "forms.passesNoPage":
+    "Noch keine Formularseite. Pässe lassen sich anlegen, sobald sie in den Einstellungen eingetragen ist.",
+  "forms.passesEmptyTitle": "Noch keine Pässe",
+  "forms.passesEmptyHint": "Hier erscheinen die Pässe dieses Formulars.",
+  "forms.passCreate": "Pass anlegen",
+  "forms.passCreateTitle": "Neuer Pass",
+  "forms.passCreateSubmit": "Anlegen",
+  "forms.passMaxUses": "Nutzungslimit",
+  "forms.passMaxUsesHint":
+    "Wie oft mit diesem Pass eingesendet werden kann, höchstens {max}. Leer: unbegrenzt bis zum Ablauf.",
+  "forms.passExpiry": "Gültig für (Stunden)",
+  "forms.passExpiryHint":
+    "Ab jetzt, höchstens {max} Stunden (ein Jahr). Leer: läuft nicht ab.",
+  "forms.passMetadata": "Metadaten",
+  "forms.passMetadataHint":
+    "Kontext für die E-Mail, z. B. eine Ticket- oder Kampagnen-ID, als Platzhalter {{pass.<Schlüssel>}}. Keine personenbezogenen Daten eintragen.",
+  "forms.passMetadataKey": "Schlüssel",
+  "forms.passMetadataValue": "Wert",
+  "forms.passMetadataAdd": "Eintrag hinzufügen",
+  "forms.passMetadataRemove": "Eintrag entfernen",
+  "forms.passCreated": "Pass angelegt",
+  "forms.passCreatedHint":
+    "Der Link wird nur jetzt angezeigt. Bitte kopieren und weitergeben; später lässt er sich nicht mehr anzeigen.",
+  "forms.passLink": "Link mit Pass",
+  "forms.passCopy": "Kopieren",
+  "forms.passCopied": "Kopiert",
+  "forms.passDone": "Fertig",
+  "forms.columnPassCreated": "Angelegt",
+  "forms.columnPassUses": "Nutzungen",
+  "forms.columnPassExpires": "Gültig bis",
+  "forms.columnPassMetadata": "Metadaten",
+  "forms.columnPassStatus": "Status",
+  "forms.passUses": "{used} von {max}",
+  "forms.passUsesUnlimited": "{used} von unbegrenzt",
+  "forms.passNoExpiry": "Unbegrenzt",
+  "forms.passNoMetadata": "–",
+  "forms.passBy": "von {by}",
+  "forms.passSourceN8n": "über n8n",
+  "forms.passStatus.valid": "Gültig",
+  "forms.passStatus.used_up": "Aufgebraucht",
+  "forms.passStatus.expired": "Abgelaufen",
+  "forms.passStatus.revoked": "Widerrufen",
+  "forms.passRevoke": "Widerrufen",
+  "forms.passRevokeTitle": "Pass widerrufen",
+  "forms.passRevokeText":
+    "Der Pass wird sofort und endgültig ungültig. Wer den Link hat, kann das Formular damit nicht mehr ausfüllen. Bereits angenommene Einsendungen werden weiter zugestellt.",
   "forms.lifecycleTitle": "Archivieren und löschen",
   "forms.archive": "Archivieren",
   "forms.archiveHint":
@@ -293,6 +354,24 @@ export const de = {
     "„{address}“ gehört zu keiner erlaubten Empfänger-Domain. Einsendungen dürfen nicht an private Postfächer gehen; weitere Domains gibt ein Super Admin in den Einstellungen frei.",
   "forms.errorTooManyRecipients":
     "Höchstens {maxRecipients} Empfänger sind möglich.",
+  "forms.errorPageInvalid":
+    "Die Formularseite muss eine Web-Adresse sein, die mit https:// oder http:// beginnt.",
+  "forms.errorPassMaxUses":
+    "Das Nutzungslimit muss eine ganze Zahl von 1 bis {maxUses} sein, oder leer für unbegrenzt.",
+  "forms.errorPassExpiry":
+    "Die Gültigkeit muss eine ganze Zahl von 1 bis {maxHours} Stunden sein, oder leer für unbegrenzt.",
+  "forms.errorPassMetadataKey":
+    "Schlüssel der Metadaten dürfen nur Buchstaben ohne Umlaute, Ziffern, _ und - enthalten, höchstens 50 Zeichen.",
+  "forms.errorPassMetadataDuplicate":
+    "Jeder Schlüssel darf nur einmal vorkommen.",
+  "forms.errorPassMetadataValueTooLong":
+    "Werte der Metadaten dürfen höchstens {maxValue} Zeichen lang sein.",
+  "forms.errorPassMetadataTooMany":
+    "Höchstens {maxEntries} Metadaten sind möglich.",
+  "forms.errorPassNotProtected":
+    "Pässe gibt es nur für geschützte Formulare. Bitte erst in den Einstellungen den Zugang auf „Geschützt“ stellen.",
+  "forms.errorPassNoPage":
+    "Bitte erst in den Einstellungen die Formularseite eintragen.",
   "forms.errorForbidden":
     "Nur Mitglieder des Teams und Super Admins dürfen seine Formulare anlegen und ändern.",
   "forms.errorGeneric":
@@ -472,6 +551,18 @@ export const de = {
   "audit.action.formArchived": "Formular archiviert",
   "audit.action.formUnarchived": "Formular aus dem Archiv geholt",
   "audit.action.formDeleted": "Formular endgültig gelöscht",
+  "audit.action.formAccessChanged": "Zugang geändert",
+  "audit.summary.formAccessPublic": "{name}: öffentlich",
+  "audit.summary.formAccessProtected": "{name}: geschützt",
+  "audit.action.formPageChanged": "Formularseite geändert",
+  "audit.action.formPassCreated": "Pass angelegt",
+  "audit.summary.formPassCreated": "{name}: {uses}, {expiry}",
+  "audit.summary.formPassCreatedN8n": "{name}: {uses}, {expiry}, über n8n",
+  "audit.summary.formPassUses": "{max} Nutzung(en)",
+  "audit.summary.formPassUnlimited": "unbegrenzte Nutzungen",
+  "audit.summary.formPassExpires": "gültig bis {at}",
+  "audit.summary.formPassNoExpiry": "ohne Ablauf",
+  "audit.action.formPassRevoked": "Pass widerrufen",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
   "audit.action.formVersionRestored": "Version wiederhergestellt",

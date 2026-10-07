@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing, archiving and deleting forms (tickets 04-10, 20-24). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing, archiving and deleting forms, and form passes (tickets 04-10, 20-25). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 42 of 42 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 44 of 44 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -259,6 +259,43 @@ begin
     raise exception 'RLS check 40 failed: Member A archived team B''s form';
   exception when insufficient_privilege then null;
   end;
+
+  -- 43. A member makes their own team's form protected, creates a form
+  -- pass for it and revokes it, but never reads its hash. Another team's
+  -- form gets no pass from them.
+  update public.forms
+  set access_type = 'protected', page_url = 'https://rls-check.example.invalid/formular'
+  where id = '00000000-0000-4000-8000-0000000000f1';
+  get diagnostics changed = row_count;
+  if changed <> 1 then
+    raise exception 'RLS check 43 failed: Member A could not protect team A''s form';
+  end if;
+  -- Kept for Member B, who must not revoke it.
+  perform set_config('rls_check.form_pass',
+    public.create_form_pass('00000000-0000-4000-8000-0000000000f1',
+      repeat('c', 64), 1, null, '{"ticket": "RLS-1"}')::text, true);
+  perform public.revoke_form_pass(current_setting('rls_check.form_pass')::uuid);
+  if not exists (select 1 from public.form_passes
+                 where form_id = '00000000-0000-4000-8000-0000000000f1'
+                   and revoked_at is not null) then
+    raise exception 'RLS check 43 failed: Member A could not create and revoke a form pass';
+  end if;
+  begin
+    perform token_hash from public.form_passes;
+    raise exception 'RLS check 43 failed: Member A can read form pass hashes';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.create_form_pass('00000000-0000-4000-8000-0000000000f2',
+      repeat('d', 64), 1, null, '{}');
+    raise exception 'RLS check 43 failed: Member A created a form pass for team B''s form';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.form_passes set use_count = 0;
+    raise exception 'RLS check 43 failed: Member A wrote a form pass directly';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- As Member B ---------------------------------------------------------------
@@ -284,6 +321,17 @@ begin
              where form_id = '00000000-0000-4000-8000-0000000000f1') then
     raise exception 'RLS check 30 failed: Member B sees team A''s form versions';
   end if;
+
+  -- 43. A member sees no form passes of other teams, and cannot revoke them.
+  if exists (select 1 from public.form_passes
+             where form_id = '00000000-0000-4000-8000-0000000000f1') then
+    raise exception 'RLS check 43 failed: Member B sees team A''s form passes';
+  end if;
+  begin
+    perform public.revoke_form_pass(current_setting('rls_check.form_pass')::uuid);
+    raise exception 'RLS check 43 failed: Member B revoked a form pass of team A';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- As the Team Admin of team A -------------------------------------------------
@@ -420,6 +468,14 @@ begin
         and actor_id = '00000000-0000-4000-8000-00000000c003'
         and entity_id = '00000000-0000-4000-8000-0000000000f1') <> 2 then
     raise exception 'RLS check 41 failed: the archiving and unarchiving of check 40 are not in the audit log';
+  end if;
+
+  -- 44. A Team Admin sees the form pass creation and revocation of check 43
+  -- in the log.
+  if (select count(distinct action) from public.audit_log
+      where action in ('form_pass.created', 'form_pass.revoked')
+        and actor_id = '00000000-0000-4000-8000-00000000c003') <> 2 then
+    raise exception 'RLS check 44 failed: the form pass creation and revocation of check 43 are not in the audit log';
   end if;
 
   -- 42. Only Super Admins delete forms for good, not even a Team Admin.
@@ -565,7 +621,8 @@ declare
   exposed text;
 begin
   -- 9. The anon role cannot read teams, memberships, the audit log, forms or
-  -- form versions, nor publish, restore, discard, archive or delete (ADR-0004).
+  -- form versions, nor publish, restore, discard, archive or delete, nor
+  -- create or revoke form passes (ADR-0004).
   begin
     perform 1 from public.teams;
     raise exception 'RLS check 9 failed: anon can read teams';
@@ -621,6 +678,17 @@ begin
     raise exception 'RLS check 9 failed: anon can delete forms';
   exception when insufficient_privilege then null;
   end;
+  begin
+    perform public.create_form_pass('00000000-0000-4000-8000-0000000000f1',
+      repeat('e', 64), 1, null, '{}');
+    raise exception 'RLS check 9 failed: anon can create form passes';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.revoke_form_pass(gen_random_uuid());
+    raise exception 'RLS check 9 failed: anon can revoke form passes';
+  exception when insufficient_privilege then null;
+  end;
 
   -- 32. The anon role has no privilege on any table, view or sequence of
   -- ours, and cannot call what /load-form and /dispatch-email call (ADR-0004).
@@ -660,6 +728,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 42 of 42 checks' as result;
+select 'RLS checklist passed: 44 of 44 checks' as result;
 
 rollback;
