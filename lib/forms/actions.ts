@@ -22,7 +22,7 @@ import {
 } from "./draft.ts";
 import { emailTemplateProblem } from "./email-template.ts";
 import { isFormId } from "./id.ts";
-import { formNameProblem } from "./name.ts";
+import { confirmsDeletion, formNameProblem } from "./name.ts";
 import { changelogProblem, normalizeChangelog } from "./publish.ts";
 import { getFormDraft } from "./queries.ts";
 import { parseRecipients } from "./recipients.ts";
@@ -44,6 +44,7 @@ const INSUFFICIENT_PRIVILEGE = "42501";
 const DRAFT_WITHOUT_QUESTIONS = "HF003"; // raised by public.publish_form()
 const VERSION_NOT_FOUND = "HF007"; // raised by public.restore_form_version()
 const NOT_YET_PUBLISHED = "HF008"; // raised by public.discard_draft_changes()
+const FORM_NOT_FOUND = "HF009"; // raised by public.delete_form()
 // Raised by private.check_recipient_domains(), with the address as detail.
 const RECIPIENT_DOMAIN_NOT_ALLOWED = "HF006";
 
@@ -331,6 +332,73 @@ async function reopenedDraft(id: string): Promise<DraftResetResult> {
     console.error("Draft could not be reloaded", error);
     return { error: "forms.errorGeneric" };
   }
+}
+
+export type FormLifecycleResult = { error: MessageKey | null };
+
+/**
+ * Archives a form no longer needed: it leaves the forms list, and
+ * `/load-form` and `/submit-form` refuse it, while its versions and
+ * statistics stay. Members of the owning team and Super Admins may; the
+ * database checks it and records it in the audit log.
+ */
+export async function archiveForm(id: string): Promise<FormLifecycleResult> {
+  return setArchived(id, "archive_form");
+}
+
+/** Takes a form out of the archive; it is served again at once. */
+export async function unarchiveForm(id: string): Promise<FormLifecycleResult> {
+  return setArchived(id, "unarchive_form");
+}
+
+async function setArchived(
+  id: string,
+  rpc: "archive_form" | "unarchive_form",
+): Promise<FormLifecycleResult> {
+  if (!isFormId(id)) return { error: "forms.errorForbidden" };
+
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc(rpc, { form: id });
+  if (error) return { error: writeError(error) };
+
+  refresh();
+  return { error: null };
+}
+
+/**
+ * Deletes a form for good, with its versions and statistics, once
+ * `confirmation` is its name. Only Super Admins may; the database checks it
+ * and records it in the audit log. Opens the forms list afterwards.
+ */
+export async function deleteForm(
+  id: string,
+  confirmation: string,
+): Promise<FormLifecycleResult> {
+  if (!isFormId(id)) return { error: "forms.errorFormGone" };
+
+  const profile = await requireProfile();
+  if (!profile.isSuperAdmin) return { error: "forms.errorDeleteForbidden" };
+  const supabase = await createClient();
+  const { data: form, error: readError } = await supabase
+    .from("forms")
+    .select("name")
+    .eq("id", id)
+    .maybeSingle<{ name: string }>();
+  if (readError) return { error: writeError(readError) };
+  if (!form) return { error: "forms.errorFormGone" };
+  if (!confirmsDeletion(confirmation, form.name)) {
+    return { error: "forms.errorDeleteConfirm" };
+  }
+
+  const { error } = await supabase.rpc("delete_form", { form: id });
+  if (error?.code === FORM_NOT_FOUND) return { error: "forms.errorFormGone" };
+  if (error?.code === INSUFFICIENT_PRIVILEGE) {
+    return { error: "forms.errorDeleteForbidden" };
+  }
+  if (error) return { error: writeError(error) };
+
+  redirect("/forms");
 }
 
 function writeError(error: PostgrestError): MessageKey {

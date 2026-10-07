@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing forms (tickets 04-10, 20-23). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing, archiving and deleting forms (tickets 04-10, 20-24). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 39 of 39 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 42 of 42 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -244,6 +244,21 @@ begin
   if changed <> 0 then
     raise exception 'RLS check 38 failed: Member A closed team B''s form';
   end if;
+
+  -- 40. A member archives and unarchives their own team's form; another
+  -- team's form they cannot archive.
+  perform public.archive_form('00000000-0000-4000-8000-0000000000f1');
+  if not exists (select 1 from public.forms
+                 where id = '00000000-0000-4000-8000-0000000000f1'
+                   and archived_at is not null) then
+    raise exception 'RLS check 40 failed: Member A could not archive team A''s form';
+  end if;
+  perform public.unarchive_form('00000000-0000-4000-8000-0000000000f1');
+  begin
+    perform public.archive_form('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 40 failed: Member A archived team B''s form';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- As Member B ---------------------------------------------------------------
@@ -399,12 +414,34 @@ begin
     raise exception 'RLS check 39 failed: the closing and reopening of check 38 are not in the audit log';
   end if;
 
-  -- 24. Nobody signed in moves a form to another team, deletes it, sets
-  -- what only publishing and archiving may set, or who saved the draft.
+  -- 41. A Team Admin sees the archiving and unarchiving of check 40 in the log.
+  if (select count(distinct action) from public.audit_log
+      where action in ('form.archived', 'form.unarchived')
+        and actor_id = '00000000-0000-4000-8000-00000000c003'
+        and entity_id = '00000000-0000-4000-8000-0000000000f1') <> 2 then
+    raise exception 'RLS check 41 failed: the archiving and unarchiving of check 40 are not in the audit log';
+  end if;
+
+  -- 42. Only Super Admins delete forms for good, not even a Team Admin.
+  begin
+    perform public.delete_form('00000000-0000-4000-8000-0000000000f1');
+    raise exception 'RLS check 42 failed: the Team Admin deleted a form';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- 24. Nobody signed in moves a form to another team, deletes it through
+  -- the Data API, sets what only publishing and archiving may set, or who
+  -- saved the draft.
   begin
     update public.forms set current_version = 1
     where id = '00000000-0000-4000-8000-0000000000f1';
     raise exception 'RLS check 24 failed: the Team Admin wrote a column without a write path';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.forms set archived_at = now()
+    where id = '00000000-0000-4000-8000-0000000000f1';
+    raise exception 'RLS check 24 failed: the Team Admin set when a form was archived';
   exception when insufficient_privilege then null;
   end;
   begin
@@ -450,6 +487,7 @@ select set_config('request.jwt.claims',
 do $$
 declare
   changed int;
+  doomed uuid;
 begin
   -- 7. A Super Admin sees every team and every membership.
   if (select count(*) from public.teams where id in (
@@ -501,6 +539,20 @@ begin
                    and actor_id = '00000000-0000-4000-8000-00000000c001') then
     raise exception 'RLS check 34 failed: the settings change is not in the audit log';
   end if;
+
+  -- 42. A Super Admin deletes a form for good, and it is in the audit log.
+  insert into public.forms (team_id, name)
+  values ('00000000-0000-4000-8000-0000000000b1', 'RLS-Check Formular C')
+  returning id into doomed;
+  perform public.delete_form(doomed);
+  if exists (select 1 from public.forms where id = doomed) then
+    raise exception 'RLS check 42 failed: the Super Admin could not delete a form';
+  end if;
+  if not exists (select 1 from public.audit_log
+                 where action = 'form.deleted' and entity_id = doomed
+                   and actor_id = '00000000-0000-4000-8000-00000000c001') then
+    raise exception 'RLS check 42 failed: the deletion is not in the audit log';
+  end if;
 end $$;
 
 -- As a visitor (anon) ---------------------------------------------------------
@@ -513,7 +565,7 @@ declare
   exposed text;
 begin
   -- 9. The anon role cannot read teams, memberships, the audit log, forms or
-  -- form versions, nor publish, restore or discard (ADR-0004).
+  -- form versions, nor publish, restore, discard, archive or delete (ADR-0004).
   begin
     perform 1 from public.teams;
     raise exception 'RLS check 9 failed: anon can read teams';
@@ -552,6 +604,21 @@ begin
   begin
     perform public.discard_draft_changes('00000000-0000-4000-8000-0000000000f2');
     raise exception 'RLS check 9 failed: anon can discard draft changes';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.archive_form('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 9 failed: anon can archive forms';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.unarchive_form('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 9 failed: anon can unarchive forms';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.delete_form('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 9 failed: anon can delete forms';
   exception when insufficient_privilege then null;
   end;
 
@@ -593,6 +660,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 39 of 39 checks' as result;
+select 'RLS checklist passed: 42 of 42 checks' as result;
 
 rollback;

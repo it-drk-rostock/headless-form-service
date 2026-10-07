@@ -53,7 +53,7 @@ A form temporarily not accepting submissions; its embed shows a closed notice.
 _Avoid_: Inactive, disabled
 
 **Archived Form**:
-A form retired for good: hidden from lists, refusing loads and submissions, but keeping its history and statistics.
+A form retired from use: hidden from lists, refusing loads and submissions, but keeping its history and statistics. It can be taken out of the archive again; only deleting a form is for good.
 _Avoid_: Deleted
 
 **Form Page**:

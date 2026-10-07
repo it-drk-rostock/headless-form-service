@@ -238,15 +238,25 @@ describe("describeAuditEntry", () => {
     ).toEqual({ action: label, summary });
   });
 
+  it.each([
+    ["form.archived", "Formular archiviert", "Kontakt"],
+    ["form.unarchived", "Formular aus dem Archiv geholt", "Kontakt"],
+    ["form.deleted", "Formular endgültig gelöscht", "Kontakt"],
+  ])("describes archiving and deleting (%s)", (action, label, summary) => {
+    expect(
+      describeAuditEntry({ action, details: { name: "Kontakt" } }),
+    ).toEqual({ action: label, summary });
+  });
+
   it("shows actions it does not know yet as they are stored", () => {
     expect(
       describeAuditEntry({
-        action: "form.archived",
-        details: { name: "Kontakt", archived: true },
+        action: "pass.created",
+        details: { name: "Kontakt", uses: 1 },
       }),
     ).toEqual({
-      action: "form.archived",
-      summary: "name: Kontakt, archived: true",
+      action: "pass.created",
+      summary: "name: Kontakt, uses: 1",
     });
   });
 });

@@ -139,9 +139,9 @@ Super Admins change the allowed origins, the allowed recipient domains and both 
 
 ### Forms
 
-`public.forms` holds each team's forms: settings that take effect at once (name, recipients, and later closed, archived and the rest), plus the single draft. Any member of the owning team, and every Super Admin, can create a form and change its name, recipients and bot protection (see *Bot protection* below). `/forms` lists the forms of all your teams, without archived ones. `/forms/[id]` shows a form's settings.
+`public.forms` holds each team's forms: settings that take effect at once (name, recipients, closed, archived and the rest), plus the single draft. Any member of the owning team, and every Super Admin, can create a form and change its name, recipients and bot protection (see *Bot protection* below). `/forms` lists the forms of all your teams, without archived ones; *Archiviert* (`/forms?filter=archived`) lists those. `/forms/[id]` shows a form's settings.
 
-- Creating a form asks which of your teams owns it. A form never moves to another team, and nobody deletes it through the Data API.
+- Creating a form asks which of your teams owns it. A form never moves to another team, and nobody deletes it through the Data API (see *Archiving and deleting forms*).
 - Recipients must be lower-case email addresses (the `public.email_address` domain, at most 20 per form) on an allowed recipient domain (see *Global settings*). The dashboard accepts one per line, or separated by commas or semicolons, and stores them lower-case, each once. A new form starts without recipients; they are set afterwards, so every list shows up in the audit log as a change.
 - Creating, renaming, recipient changes and switching bot protection are recorded in the audit log by database triggers, with the old and new value.
 - Forms are part of `supabase/snippets/rls-checklist-teams.sql` (checks 20–25, plus 4 and 9).
@@ -173,6 +173,17 @@ The *Formular geschlossen* switch in a form's settings sets `forms.is_closed`. I
 - Submissions accepted before closing are still delivered.
 - Closing writes `form.closed`, and reopening writes `form.reopened` (*Formular geschlossen* / *Formular wieder geöffnet* in the audit log).
 - Checks 38–39 of `supabase/snippets/rls-checklist-teams.sql` cover it.
+
+### Archiving and deleting forms
+
+*Archivieren und löschen*, below a form's settings, retires a form. Each action confirms in a modal.
+
+- *Archivieren* goes through `public.archive_form(form)`, which sets `forms.archived_at` to now. Archiving again keeps the first time. Members of the owning team and Super Admins may call it. Nobody writes `archived_at` directly.
+- An archived form leaves the forms list and shows under *Archiviert*. Its page still opens, with a notice. `/load-form` answers 404 and `/submit-form` answers 404 `form_not_found` (`load_form` and `submission_form` skip archived forms). Its versions, statistics and load counts stay. Submissions accepted before archiving are still delivered.
+- *Aus dem Archiv holen* goes through `public.unarchive_form(form)`, open to the same people. The form is served again at once if it is published.
+- *Endgültig löschen* shows only to Super Admins. It asks for the form's name and then calls `public.delete_form(form)`, which refuses everyone else. The form goes with its versions, statistics and load counts (foreign keys cascade). Its audit log entries stay. Submissions still queued for it are not delivered: the dispatcher answers 404, and QStash moves them to the DLQ after its retries.
+- A database trigger writes `form.archived`, `form.unarchived` and `form.deleted` to the audit log, whichever path made the change (*Formular archiviert* / *Formular aus dem Archiv geholt* / *Formular endgültig gelöscht*). The deletion entry keeps the team, so the team's Team Admins still see it.
+- Checks 40–42 of `supabase/snippets/rls-checklist-teams.sql` cover it, plus 9 and 24.
 
 ### Loading forms
 

@@ -59,6 +59,11 @@ export const de = {
   "forms.title": "Formulare",
   "forms.emptyTitle": "Noch keine Formulare",
   "forms.emptyHint": "Hier erscheinen die Formulare aller eigenen Teams.",
+  "forms.archivedEmptyTitle": "Keine archivierten Formulare",
+  "forms.archivedEmptyHint":
+    "Hier erscheinen archivierte Formulare aller eigenen Teams. Sie lassen sich jederzeit aus dem Archiv holen.",
+  "forms.filterActive": "In Verwendung",
+  "forms.filterArchived": "Archiviert",
   "forms.emptyHintNoTeam":
     "Formulare gehören einem Team. Sobald Sie einem Team angehören, können Sie hier Formulare anlegen.",
   "forms.create": "Formular anlegen",
@@ -227,6 +232,28 @@ export const de = {
   "forms.detailStatus": "Status",
   "forms.detailCreated": "Angelegt am",
   "forms.detailVersion": "Aktuelle Version",
+  "forms.archivedNotice":
+    "Archiviert am {at}. Das Formular wird nicht mehr geladen und nimmt keine Einsendungen an. Versionen und Statistik bleiben erhalten.",
+  "forms.lifecycleTitle": "Archivieren und löschen",
+  "forms.archive": "Archivieren",
+  "forms.archiveHint":
+    "Für Formulare, die nicht mehr gebraucht werden: Sie verschwinden aus der Formularliste, die Einbettung zeigt nichts mehr an, und Einsendungen werden abgelehnt. Versionen und Statistik bleiben erhalten. Das lässt sich rückgängig machen.",
+  "forms.archiveTitle": "Formular archivieren",
+  "forms.archiveText":
+    "„{name}“ wird archiviert. Die Einbettung zeigt das Formular nicht mehr an, und Einsendungen werden abgelehnt, bis es aus dem Archiv geholt wird. Bereits angenommene Einsendungen werden weiter zugestellt.",
+  "forms.unarchive": "Aus dem Archiv holen",
+  "forms.unarchiveHint":
+    "Das Formular ist archiviert. Aus dem Archiv geholt, erscheint es wieder in der Formularliste, und die Einbettung zeigt sofort wieder die aktuelle Version.",
+  "forms.unarchiveTitle": "Formular aus dem Archiv holen",
+  "forms.unarchiveText":
+    "„{name}“ erscheint wieder in der Formularliste. Ist es veröffentlicht, wird es sofort wieder geladen und nimmt Einsendungen an.",
+  "forms.delete": "Endgültig löschen",
+  "forms.deleteHint":
+    "Nur für Super Admins. Löscht das Formular mit allen Versionen und der Statistik. Das lässt sich nicht rückgängig machen; die Einträge im Audit-Log bleiben.",
+  "forms.deleteTitle": "Formular endgültig löschen",
+  "forms.deleteText":
+    "„{name}“ wird mit allen Versionen und der Statistik gelöscht. Das lässt sich nicht rückgängig machen. Einsendungen, die noch nicht zugestellt sind, werden nicht mehr zugestellt.",
+  "forms.deleteConfirm": "Zur Bestätigung den Namen des Formulars eingeben",
   "forms.notFoundTitle": "Formular nicht gefunden",
   "forms.notFoundHint":
     "Dieses Formular gibt es nicht, oder es ist nur für die Mitglieder seines Teams sichtbar.",
@@ -251,6 +278,11 @@ export const de = {
   "forms.errorChangelogTooLong":
     "Die Änderungsnotiz darf höchstens {max} Zeichen lang sein.",
   "forms.errorVersionNotFound": "Diese Version gibt es nicht.",
+  "forms.errorDeleteConfirm":
+    "Der eingegebene Name stimmt nicht mit dem Namen des Formulars überein.",
+  "forms.errorDeleteForbidden":
+    "Nur Super Admins dürfen Formulare endgültig löschen.",
+  "forms.errorFormGone": "Dieses Formular gibt es nicht mehr.",
   "forms.errorDiscardUnpublished":
     "Das Formular ist noch nicht veröffentlicht. Es gibt keine Version, auf die der Entwurf zurückgesetzt werden kann.",
   "forms.errorPublishEmpty":
@@ -437,6 +469,9 @@ export const de = {
   "audit.summary.formSettingChanged": "{name}: {from} → {to}",
   "audit.action.formClosed": "Formular geschlossen",
   "audit.action.formReopened": "Formular wieder geöffnet",
+  "audit.action.formArchived": "Formular archiviert",
+  "audit.action.formUnarchived": "Formular aus dem Archiv geholt",
+  "audit.action.formDeleted": "Formular endgültig gelöscht",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
   "audit.action.formVersionRestored": "Version wiederhergestellt",

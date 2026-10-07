@@ -25,6 +25,8 @@ export type FormDetails = FormSummary & {
   senderDisplayName: string;
   /** The version visitors are served; null until the first publish. */
   currentVersion: number | null;
+  /** When the form was archived; null while in use. */
+  archivedAt: string | null;
   createdAt: string;
 };
 
@@ -36,6 +38,14 @@ export function formStatus(form: {
   if (form.archivedAt) return "archived";
   if (form.isClosed) return "closed";
   return form.currentVersion === null ? "draft" : "published";
+}
+
+/** Which forms `/forms` lists: those in use, or the archived ones. */
+export type FormsFilter = "active" | "archived";
+
+/** The filter a `?filter=` search parameter asks for, the forms in use if none or unknown. */
+export function formsFilter(param: string | string[] | undefined): FormsFilter {
+  return param === "archived" ? "archived" : "active";
 }
 
 /** The views of a form's page; the first, the designer, is the default. */

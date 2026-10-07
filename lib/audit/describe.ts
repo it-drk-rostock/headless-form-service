@@ -85,6 +85,18 @@ const actions: Record<
     label: t("audit.action.formReopened"),
     summary: (d) => text(d.name),
   },
+  "form.archived": {
+    label: t("audit.action.formArchived"),
+    summary: (d) => text(d.name),
+  },
+  "form.unarchived": {
+    label: t("audit.action.formUnarchived"),
+    summary: (d) => text(d.name),
+  },
+  "form.deleted": {
+    label: t("audit.action.formDeleted"),
+    summary: (d) => text(d.name),
+  },
   "settings.origins_changed": {
     label: t("audit.action.settingsOriginsChanged"),
     summary: (d) => listChanges(texts(d.from), texts(d.to)),

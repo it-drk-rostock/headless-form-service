@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formStatus, formView } from "./types.ts";
+import { formStatus, formsFilter, formView } from "./types.ts";
 
 const open = { archivedAt: null, isClosed: false, currentVersion: null };
 
@@ -42,5 +42,18 @@ describe("formView", () => {
     expect(formView(undefined)).toBe("designer");
     expect(formView("unbekannt")).toBe("designer");
     expect(formView(["settings", "designer"])).toBe("designer");
+  });
+});
+
+describe("formsFilter", () => {
+  it("lists archived forms when the URL asks for them", () => {
+    expect(formsFilter("archived")).toBe("archived");
+  });
+
+  it("lists the forms in use otherwise", () => {
+    expect(formsFilter(undefined)).toBe("active");
+    expect(formsFilter("active")).toBe("active");
+    expect(formsFilter("unbekannt")).toBe("active");
+    expect(formsFilter(["archived", "active"])).toBe("active");
   });
 });

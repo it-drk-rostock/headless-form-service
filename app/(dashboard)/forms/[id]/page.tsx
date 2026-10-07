@@ -1,6 +1,8 @@
-import { Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Alert, Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { IconArchive } from "@tabler/icons-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { requireProfile } from "@/lib/auth/profile.ts";
 import {
   getCurrentVersion,
   getForm,
@@ -8,7 +10,7 @@ import {
   listFormVersions,
 } from "@/lib/forms/queries.ts";
 import { formView } from "@/lib/forms/types.ts";
-import { formatDate, t } from "@/lib/i18n/index.ts";
+import { formatDate, formatDateTime, t } from "@/lib/i18n/index.ts";
 import { AnchorLink } from "../../../_components/AnchorLink.tsx";
 import { FormStatusBadge } from "../FormStatusBadge.tsx";
 import {
@@ -19,6 +21,7 @@ import { DiscardButton } from "./DraftReset.tsx";
 import { DraftStatusProvider } from "./DraftStatus.tsx";
 import { EmailTemplateEditor } from "./EmailTemplateEditor.tsx";
 import { FormDesigner } from "./FormDesigner.tsx";
+import { FormLifecycle } from "./FormLifecycle.tsx";
 import { FormSettings } from "./FormSettings.tsx";
 import { FormViews } from "./FormViews.tsx";
 import { PublishButton } from "./PublishButton.tsx";
@@ -38,14 +41,20 @@ export async function generateMetadata({
  * *Veröffentlichen* and *Änderungen verwerfen* next to the draft's editors.
  * Forms of teams the person does not belong to are not found (RLS); every
  * member of the owning team may edit the draft, publish it, restore a
- * version, discard changes and change the settings.
+ * version, discard changes, change the settings and archive the form. Only
+ * Super Admins see *Endgültig löschen*. An archived form still opens here,
+ * with a notice, so it can be taken out of the archive.
  */
 export default async function FormPage({
   params,
   searchParams,
 }: PageProps<"/forms/[id]">) {
   const { id } = await params;
-  const [form, draft] = await Promise.all([getForm(id), getFormDraft(id)]);
+  const [profile, form, draft] = await Promise.all([
+    requireProfile(),
+    getForm(id),
+    getFormDraft(id),
+  ]);
   if (!form || !draft) notFound();
   const [current, versions] = await Promise.all([
     getCurrentVersion(form),
@@ -78,7 +87,24 @@ export default async function FormPage({
           designer: draftActions,
           email: draftActions,
         }}
-        status={<CurrentVersionBadge current={current} />}
+        status={
+          <Stack gap="sm" align="flex-start">
+            <CurrentVersionBadge current={current} />
+            {form.archivedAt && (
+              <Alert
+                variant="outline"
+                color="gray"
+                icon={<IconArchive size={16} stroke={1.5} />}
+                role="status"
+                w="100%"
+              >
+                {t("forms.archivedNotice", {
+                  at: formatDateTime(form.archivedAt),
+                })}
+              </Alert>
+            )}
+          </Stack>
+        }
         views={{
           designer: <FormDesigner formId={form.id} schema={draft.schema} />,
           email: (
@@ -123,6 +149,13 @@ export default async function FormPage({
                 emailQuestions={current?.emailQuestions ?? null}
                 turnstileEnabled={form.turnstileEnabled}
                 isClosed={form.isClosed}
+              />
+
+              <FormLifecycle
+                id={form.id}
+                name={form.name}
+                archived={form.archivedAt !== null}
+                canDelete={profile.isSuperAdmin}
               />
             </>
           ),

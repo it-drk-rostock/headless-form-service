@@ -21,7 +21,12 @@ import {
   toCurrentVersion,
   toFormVersion,
 } from "./publish.ts";
-import { type FormDetails, type FormSummary, formStatus } from "./types.ts";
+import {
+  type FormDetails,
+  type FormSummary,
+  type FormsFilter,
+  formStatus,
+} from "./types.ts";
 
 type FormRow = {
   id: string;
@@ -59,20 +64,24 @@ function toSummary(row: FormRow): FormSummary {
 
 /**
  * The forms of every team the signed-in person belongs to (of every team for
- * a Super Admin), without archived ones. RLS decides which rows come back.
+ * a Super Admin): those in use, or only the archived ones. RLS decides which
+ * rows come back.
  */
-export const listMyForms = cache(async (): Promise<FormSummary[]> => {
-  await requireProfile();
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("forms")
-    .select(FORM_COLUMNS)
-    .is("archived_at", null)
-    .order("name")
-    .overrideTypes<FormRow[], { merge: false }>();
-  if (error) throw new Error(`Forms could not be loaded: ${error.message}`);
-  return data.map(toSummary);
-});
+export const listMyForms = cache(
+  async (filter: FormsFilter = "active"): Promise<FormSummary[]> => {
+    await requireProfile();
+    const supabase = await createClient();
+    const query = supabase.from("forms").select(FORM_COLUMNS);
+    const { data, error } = await (filter === "archived"
+      ? query.not("archived_at", "is", null)
+      : query.is("archived_at", null)
+    )
+      .order("name")
+      .overrideTypes<FormRow[], { merge: false }>();
+    if (error) throw new Error(`Forms could not be loaded: ${error.message}`);
+    return data.map(toSummary);
+  },
+);
 
 /** One form, or null when it does not exist or the person may not see it. */
 export const getForm = cache(
@@ -98,6 +107,7 @@ export const getForm = cache(
       replyToQuestion: data.reply_to_question,
       senderDisplayName: data.sender_display_name,
       currentVersion: data.current_version,
+      archivedAt: data.archived_at,
       createdAt: data.created_at,
     };
   },

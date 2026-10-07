@@ -10,3 +10,11 @@ export function formNameProblem(name: string): MessageKey | null {
   if (trimmed.length > FORM_NAME_MAX_LENGTH) return "forms.errorNameTooLong";
   return null;
 }
+
+/**
+ * Whether what someone typed into the hard-delete dialog is the form's name,
+ * so a form is never deleted for good by a stray click.
+ */
+export function confirmsDeletion(typed: string, name: string): boolean {
+  return typed.trim() === name.trim();
+}

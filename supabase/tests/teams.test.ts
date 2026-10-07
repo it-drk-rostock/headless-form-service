@@ -340,6 +340,22 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 39 failed/);
   });
 
+  it("catches archiving that is not recorded", async () => {
+    // A settings trigger that does not fire when archived_at changes.
+    await db.exec(`drop trigger forms_audit_settings_change on public.forms;
+      create trigger forms_audit_settings_change
+        after update of name, recipients, is_closed on public.forms
+        for each row execute function private.audit_form_change()`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 41 failed/);
+  });
+
+  it("catches hard delete open to Team Admins", async () => {
+    await db.exec(`create or replace function public.delete_form(form uuid)
+      returns void language sql security definer set search_path = '' as $$
+        delete from public.forms where id = form $$`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 42 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
