@@ -15,7 +15,11 @@ import {
   CURRENT_VERSION_COLUMNS,
   type CurrentVersion,
   type CurrentVersionRow,
+  FORM_VERSION_COLUMNS,
+  type FormVersion,
+  type FormVersionRow,
   toCurrentVersion,
+  toFormVersion,
 } from "./publish.ts";
 import { type FormDetails, type FormSummary, formStatus } from "./types.ts";
 
@@ -159,4 +163,24 @@ export async function getCurrentVersion(
     );
   }
   return toCurrentVersion(data);
+}
+
+/**
+ * Every version of a form, newest first, with who published it, when, and
+ * its changelog. RLS shows them to the people who see the form.
+ */
+export async function listFormVersions(id: string): Promise<FormVersion[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("form_versions")
+    .select(FORM_VERSION_COLUMNS)
+    .eq("form_id", id)
+    .order("version", { ascending: false })
+    .overrideTypes<FormVersionRow[], { merge: false }>();
+  if (error) {
+    throw new Error(
+      `Versions of form ${id} could not be loaded: ${error.message}`,
+    );
+  }
+  return data.map(toFormVersion);
 }

@@ -35,6 +35,7 @@ describe("formView", () => {
     expect(formView("settings")).toBe("settings");
     expect(formView("designer")).toBe("designer");
     expect(formView("email")).toBe("email");
+    expect(formView("versions")).toBe("versions");
   });
 
   it("falls back to the designer", () => {

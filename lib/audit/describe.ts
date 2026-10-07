@@ -109,6 +109,22 @@ const actions: Record<
         version: text(d.version),
       }),
   },
+  "form.version_restored": {
+    label: t("audit.action.formVersionRestored"),
+    summary: (d) =>
+      t("audit.summary.formVersionRestored", {
+        name: text(d.name),
+        version: text(d.version),
+      }),
+  },
+  "form.draft_discarded": {
+    label: t("audit.action.formDraftDiscarded"),
+    summary: (d) =>
+      t("audit.summary.formDraftDiscarded", {
+        name: text(d.name),
+        version: text(d.version),
+      }),
+  },
 };
 
 /**

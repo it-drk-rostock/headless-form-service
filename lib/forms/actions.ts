@@ -17,12 +17,14 @@ import {
   type DraftStamp,
   type DraftStampRow,
   draftSchemaProblem,
+  type FormDraft,
   toDraftStamp,
 } from "./draft.ts";
 import { emailTemplateProblem } from "./email-template.ts";
 import { isFormId } from "./id.ts";
 import { formNameProblem } from "./name.ts";
 import { changelogProblem, normalizeChangelog } from "./publish.ts";
+import { getFormDraft } from "./queries.ts";
 import { parseRecipients } from "./recipients.ts";
 import { parseReplyToQuestion } from "./reply-to.ts";
 import { senderNameProblem } from "./sender-name.ts";
@@ -40,6 +42,8 @@ export type FormActionState = {
 // The database refuses with "insufficient_privilege" when RLS rejects a write.
 const INSUFFICIENT_PRIVILEGE = "42501";
 const DRAFT_WITHOUT_QUESTIONS = "HF003"; // raised by public.publish_form()
+const VERSION_NOT_FOUND = "HF007"; // raised by public.restore_form_version()
+const NOT_YET_PUBLISHED = "HF008"; // raised by public.discard_draft_changes()
 // Raised by private.check_recipient_domains(), with the address as detail.
 const RECIPIENT_DOMAIN_NOT_ALLOWED = "HF006";
 
@@ -255,6 +259,73 @@ export async function publishForm(
 
   refresh();
   return { error: null, version: data as number };
+}
+
+export type DraftResetResult =
+  | { error: MessageKey }
+  | { error: null; draft: FormDraft };
+
+/**
+ * Restores a form version: its questions and email template replace the
+ * draft, to be published again as a new version. Visitors keep seeing the
+ * current version until then. The database records it in the audit log, in
+ * the same transaction. Returns the draft, so the editors can reopen it.
+ */
+export async function restoreFormVersion(
+  id: string,
+  version: number,
+): Promise<DraftResetResult> {
+  if (!isFormId(id)) return { error: "forms.errorForbidden" };
+  if (!Number.isInteger(version) || version < 1) {
+    return { error: "forms.errorVersionNotFound" };
+  }
+
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("restore_form_version", {
+    form: id,
+    version,
+  });
+  if (error?.code === VERSION_NOT_FOUND) {
+    return { error: "forms.errorVersionNotFound" };
+  }
+  if (error) return { error: writeError(error) };
+  return reopenedDraft(id);
+}
+
+/**
+ * Discards the draft's unpublished changes: the draft is reset to the
+ * current version, recorded in the audit log like restoring.
+ */
+export async function discardDraftChanges(
+  id: string,
+): Promise<DraftResetResult> {
+  if (!isFormId(id)) return { error: "forms.errorForbidden" };
+
+  await requireProfile();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("discard_draft_changes", { form: id });
+  if (error?.code === NOT_YET_PUBLISHED) {
+    return { error: "forms.errorDiscardUnpublished" };
+  }
+  if (error) return { error: writeError(error) };
+  return reopenedDraft(id);
+}
+
+/**
+ * The draft as restoring or discarding left it. The page refreshes too, so
+ * the version numbers it shows are the database's, should someone else have
+ * published meanwhile.
+ */
+async function reopenedDraft(id: string): Promise<DraftResetResult> {
+  refresh();
+  try {
+    const draft = await getFormDraft(id);
+    return draft ? { error: null, draft } : { error: "forms.errorForbidden" };
+  } catch (error) {
+    console.error("Draft could not be reloaded", error);
+    return { error: "forms.errorGeneric" };
+  }
 }
 
 function writeError(error: PostgrestError): MessageKey {

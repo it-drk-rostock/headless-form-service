@@ -4,6 +4,7 @@ import {
   changelogProblem,
   normalizeChangelog,
   toCurrentVersion,
+  toFormVersion,
 } from "./publish.ts";
 
 describe("normalizeChangelog", () => {
@@ -72,5 +73,26 @@ describe("toCurrentVersion", () => {
     expect(
       toCurrentVersion({ ...row, publisher: null }).publishedBy,
     ).toBeNull();
+  });
+});
+
+describe("toFormVersion", () => {
+  it("is a version as the history lists it: number, changelog, when and by whom", () => {
+    expect(
+      toFormVersion({
+        version: 1,
+        changelog: null,
+        created_at: "2026-10-04T09:30:00Z",
+        publisher: {
+          full_name: "Erika Beispiel",
+          email: "erika@drk-rostock.de",
+        },
+      }),
+    ).toEqual({
+      version: 1,
+      changelog: null,
+      publishedAt: "2026-10-04T09:30:00Z",
+      publishedBy: "Erika Beispiel",
+    });
   });
 });

@@ -20,36 +20,47 @@ export function changelogProblem(changelog: string): MessageKey | null {
 }
 
 /**
- * The current version of a published form. `publishedBy` is null when the
- * account is gone or not visible.
+ * A form version as the version history lists it. `publishedBy` is null
+ * when the account is gone or not visible.
  */
-export type CurrentVersion = {
+export type FormVersion = {
   version: number;
   changelog: string | null;
   publishedAt: string;
   publishedBy: string | null;
-  /** The version's email questions, which can be the Reply-To question. */
-  emailQuestions: EmailQuestion[];
 };
 
-/** The columns behind a `CurrentVersion`; the publisher's profile through its foreign key. */
-export const CURRENT_VERSION_COLUMNS =
-  "version, changelog, created_at, schema, publisher:profiles!form_versions_created_by_fkey(full_name, email)";
+/** The columns behind a `FormVersion`; the publisher's profile through its foreign key. */
+export const FORM_VERSION_COLUMNS =
+  "version, changelog, created_at, publisher:profiles!form_versions_created_by_fkey(full_name, email)";
 
-export type CurrentVersionRow = {
+export type FormVersionRow = {
   version: number;
   changelog: string | null;
   created_at: string;
-  schema: unknown;
   publisher: ProfileNameRow | null;
 };
 
-export function toCurrentVersion(row: CurrentVersionRow): CurrentVersion {
+export function toFormVersion(row: FormVersionRow): FormVersion {
   return {
     version: row.version,
     changelog: row.changelog,
     publishedAt: row.created_at,
     publishedBy: profileName(row.publisher),
-    emailQuestions: emailQuestions(row.schema),
   };
+}
+
+/** The current version of a published form. */
+export type CurrentVersion = FormVersion & {
+  /** The version's email questions, which can be the Reply-To question. */
+  emailQuestions: EmailQuestion[];
+};
+
+/** The columns behind a `CurrentVersion`. */
+export const CURRENT_VERSION_COLUMNS = `${FORM_VERSION_COLUMNS}, schema`;
+
+export type CurrentVersionRow = FormVersionRow & { schema: unknown };
+
+export function toCurrentVersion(row: CurrentVersionRow): CurrentVersion {
+  return { ...toFormVersion(row), emailQuestions: emailQuestions(row.schema) };
 }

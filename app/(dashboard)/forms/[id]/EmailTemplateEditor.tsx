@@ -72,9 +72,29 @@ const RETRY_DELAY_MS = 5000;
  * preview through the shared renderer. The body is the Standard Layout's,
  * edited visually, or a Custom HTML Template's whole email, edited as code.
  * Every change is saved shortly after it is made; concurrent saves are
- * last-write-wins.
+ * last-write-wins. Reopens on the draft that restoring or discarding left.
  */
 export function EmailTemplateEditor({
+  formId,
+  formName,
+  initialTemplate,
+}: {
+  formId: string;
+  formName: string;
+  initialTemplate: EmailTemplate;
+}) {
+  const { reset } = useDraftStatus();
+  return (
+    <TemplateEditor
+      key={reset.resetCount}
+      formId={formId}
+      formName={formName}
+      initialTemplate={reset.draft?.emailTemplate ?? initialTemplate}
+    />
+  );
+}
+
+function TemplateEditor({
   formId,
   formName,
   initialTemplate,

@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings and allowed recipient domains (tickets 04-10, 20, 21). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding (tickets 04-10, 20-22). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 35 of 35 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 37 of 37 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -204,6 +204,29 @@ begin
     raise exception 'RLS check 29 failed: Member A inserted a form version';
   exception when insufficient_privilege then null;
   end;
+
+  -- 36. A member discards the draft changes of their own team's form and
+  -- restores one of its versions; another team's form they cannot.
+  update public.forms
+  set draft_schema = '{"elements":[{"type":"comment","name":"neu"}]}'
+  where id = '00000000-0000-4000-8000-0000000000f1';
+  perform public.discard_draft_changes('00000000-0000-4000-8000-0000000000f1');
+  if (select draft_schema from public.forms
+      where id = '00000000-0000-4000-8000-0000000000f1')
+     is distinct from '{"pages":[{"name":"p","elements":[{"type":"text","name":"q"}]}]}'::jsonb then
+    raise exception 'RLS check 36 failed: Member A''s discard did not reset the draft to version 1';
+  end if;
+  perform public.restore_form_version('00000000-0000-4000-8000-0000000000f1', 1);
+  begin
+    perform public.restore_form_version('00000000-0000-4000-8000-0000000000f2', 1);
+    raise exception 'RLS check 36 failed: Member A restored a version of team B''s form';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.discard_draft_changes('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 36 failed: Member A discarded team B''s draft changes';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- As Member B ---------------------------------------------------------------
@@ -343,6 +366,14 @@ begin
     raise exception 'RLS check 31 failed: the publish of check 28 is not in the audit log';
   end if;
 
+  -- 37. A Team Admin sees the discard and the restore of check 36 in the log.
+  if (select count(distinct action) from public.audit_log
+      where action in ('form.draft_discarded', 'form.version_restored')
+        and actor_id = '00000000-0000-4000-8000-00000000c003'
+        and entity_id = '00000000-0000-4000-8000-0000000000f1') <> 2 then
+    raise exception 'RLS check 37 failed: the discard and restore of check 36 are not in the audit log';
+  end if;
+
   -- 24. Nobody signed in moves a form to another team, deletes it, sets
   -- what only publishing, closing and archiving may set, or who saved the draft.
   begin
@@ -457,7 +488,7 @@ declare
   exposed text;
 begin
   -- 9. The anon role cannot read teams, memberships, the audit log, forms or
-  -- form versions, nor publish (ADR-0004).
+  -- form versions, nor publish, restore or discard (ADR-0004).
   begin
     perform 1 from public.teams;
     raise exception 'RLS check 9 failed: anon can read teams';
@@ -486,6 +517,16 @@ begin
   begin
     perform public.publish_form('00000000-0000-4000-8000-0000000000f2');
     raise exception 'RLS check 9 failed: anon can publish forms';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.restore_form_version('00000000-0000-4000-8000-0000000000f2', 1);
+    raise exception 'RLS check 9 failed: anon can restore form versions';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.discard_draft_changes('00000000-0000-4000-8000-0000000000f2');
+    raise exception 'RLS check 9 failed: anon can discard draft changes';
   exception when insufficient_privilege then null;
   end;
 
@@ -527,6 +568,6 @@ end $$;
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 35 of 35 checks' as result;
+select 'RLS checklist passed: 37 of 37 checks' as result;
 
 rollback;

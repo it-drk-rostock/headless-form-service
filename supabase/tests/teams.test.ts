@@ -317,6 +317,20 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 35 failed/);
   });
 
+  it("catches restoring that is open to other teams", async () => {
+    // A restore without its permission check: anyone signed in may call it.
+    await db.exec(`create or replace function public.restore_form_version(form uuid, version integer)
+      returns void language sql security definer set search_path = '' as $$ select $$`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 36 failed/);
+  });
+
+  it("catches discarding that is open to other teams", async () => {
+    // A discard without its permission check: anyone signed in may call it.
+    await db.exec(`create or replace function public.discard_draft_changes(form uuid)
+      returns void language sql security definer set search_path = '' as $$ select $$`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 36 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);

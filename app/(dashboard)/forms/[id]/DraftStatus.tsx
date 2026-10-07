@@ -2,7 +2,7 @@
 
 import { Text } from "@mantine/core";
 import { createContext, useContext, useState } from "react";
-import type { DraftSchema, DraftStamp } from "@/lib/forms/draft.ts";
+import type { DraftSchema, DraftStamp, FormDraft } from "@/lib/forms/draft.ts";
 import { formatDateTime, t } from "@/lib/i18n/index.ts";
 
 /** The parts of the draft, each with its own editor and autosave. */
@@ -18,6 +18,13 @@ type DraftStatus = {
   /** Who saved the draft last and when, whichever part. */
   stamp: DraftStamp;
   setStamp: (stamp: DraftStamp) => void;
+  /**
+   * The draft as restoring or discarding left it, and how often that
+   * happened. The editors key on `resetCount`, so they reopen on this draft;
+   * null until then, when they open on the page's draft.
+   */
+  reset: { resetCount: number; draft: FormDraft | null };
+  resetDraft: (draft: FormDraft) => void;
 };
 
 const DraftStatusContext = createContext<DraftStatus>({
@@ -27,12 +34,15 @@ const DraftStatusContext = createContext<DraftStatus>({
   setSchema: () => {},
   stamp: { savedAt: null, savedBy: null },
   setStamp: () => {},
+  reset: { resetCount: 0, draft: null },
+  resetDraft: () => {},
 });
 
 /**
- * Shares the draft between the designer, the email editor and publishing:
- * publishing waits for the last change instead of freezing an older draft,
- * and the email editor offers the questions the designer saved last.
+ * Shares the draft between the designer, the email editor, publishing,
+ * restoring and discarding: publishing waits for the last change instead of
+ * freezing an older draft, the email editor offers the questions the
+ * designer saved last, and both editors reopen on a restored draft.
  */
 export function DraftStatusProvider({
   initialSchema,
@@ -48,6 +58,16 @@ export function DraftStatusProvider({
   );
   const [schema, setSchema] = useState(initialSchema);
   const [stamp, setStamp] = useState(initialStamp);
+  const [reset, setReset] = useState<DraftStatus["reset"]>({
+    resetCount: 0,
+    draft: null,
+  });
+
+  function resetDraft(draft: FormDraft) {
+    setSchema(draft.schema);
+    setStamp(draft.stamp);
+    setReset(({ resetCount }) => ({ resetCount: resetCount + 1, draft }));
+  }
 
   // Only uses the state setter, so it works from callbacks set up once.
   function setUnsaved(part: DraftPart, unsaved: boolean) {
@@ -69,6 +89,8 @@ export function DraftStatusProvider({
         setSchema,
         stamp,
         setStamp,
+        reset,
+        resetDraft,
       }}
     >
       {children}

@@ -32,7 +32,7 @@ export function FormDesigner({
   formId: string;
   schema: DraftSchema;
 }) {
-  const { setStamp } = useDraftStatus();
+  const { setStamp, reset } = useDraftStatus();
   const [result, setResult] = useState<DraftSaveResult | null>(null);
 
   function handleSaved(next: DraftSaveResult) {
@@ -65,7 +65,13 @@ export function FormDesigner({
         mih={560}
         style={{ overflow: "hidden" }}
       >
-        <DraftCreator formId={formId} schema={schema} onSaved={handleSaved} />
+        {/* Reopens on the draft that restoring or discarding left. */}
+        <DraftCreator
+          key={reset.resetCount}
+          formId={formId}
+          schema={reset.draft?.schema ?? schema}
+          onSaved={handleSaved}
+        />
       </Paper>
     </Box>
   );

@@ -113,6 +113,30 @@ describe("describeAuditEntry", () => {
     });
   });
 
+  it("describes restoring a version into the draft", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.version_restored",
+        details: { name: "Kontakt", version: 2 },
+      }),
+    ).toEqual({
+      action: "Version wiederhergestellt",
+      summary: "Kontakt: Version 2 in den Entwurf übernommen",
+    });
+  });
+
+  it("describes discarding the draft's changes", () => {
+    expect(
+      describeAuditEntry({
+        action: "form.draft_discarded",
+        details: { name: "Kontakt", version: 3 },
+      }),
+    ).toEqual({
+      action: "Änderungen verworfen",
+      summary: "Kontakt: Entwurf auf Version 3 zurückgesetzt",
+    });
+  });
+
   it.each([
     [false, "Kontakt: ausgeschaltet"],
     [true, "Kontakt: eingeschaltet"],

@@ -155,6 +155,15 @@ Super Admins change the allowed origins, the allowed recipient domains and both 
 - A new form's draft starts with the default email template: Standard Layout, a greeting and `{{answers_table}}`.
 - Publishing is part of `supabase/snippets/rls-checklist-teams.sql` (checks 28–31, plus 9).
 
+### Version history, restoring and discarding
+
+The *Versionen* view of `/forms/[id]` lists every version, newest first, with who published it, when, and its changelog.
+
+- *Wiederherstellen* on a version goes through `public.restore_form_version(form, version)`. It copies the version's questions and email template into the draft and writes `form.version_restored`. Visitors keep the current version until the draft is published, which makes the next version number. A restored version 1 can come back as version 3.
+- *Änderungen verwerfen*, next to *Veröffentlichen*, goes through `public.discard_draft_changes(form)`. It resets the draft to the current version and writes `form.draft_discarded`. While the form is not yet published, it is refused, and the button does not show.
+- Both lock the form and stamp the draft with the caller, like a draft save. They are open to the same people as publishing, and they never write `form_versions`. Both wait until the editors have saved their last change, and then the designer and the email editor reopen on the replaced draft.
+- Both are part of `supabase/snippets/rls-checklist-teams.sql` (checks 36–37, plus 9).
+
 ### Loading forms
 
 The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version, plus `turnstile_site_key` when the form has Turnstile on. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).

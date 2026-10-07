@@ -82,6 +82,7 @@ export const de = {
   "forms.settingsTitle": "Einstellungen",
   "forms.viewDesigner": "Designer",
   "forms.viewEmail": "E-Mail",
+  "forms.viewVersions": "Versionen",
   "forms.viewSettings": "Einstellungen",
   "forms.designerHint":
     "Änderungen werden automatisch im Entwurf gespeichert. Besucher sehen sie erst nach dem Veröffentlichen.",
@@ -166,6 +167,33 @@ export const de = {
   "forms.publishSubmit": "Veröffentlichen",
   "forms.published":
     "Version {version} ist veröffentlicht. Besucher sehen ab sofort diese Version.",
+  "forms.versionsHint":
+    "Wiederherstellen übernimmt Fragen und E-Mail-Vorlage einer Version in den Entwurf. Besucher sehen sie erst, wenn der Entwurf als neue Version veröffentlicht ist.",
+  "forms.versionsEmptyTitle": "Noch keine Versionen",
+  "forms.versionsEmptyHint":
+    "Jedes Veröffentlichen legt eine neue Version an. Hier lassen sie sich ansehen und wiederherstellen.",
+  "forms.columnVersion": "Version",
+  "forms.columnPublishedAt": "Veröffentlicht am",
+  "forms.columnPublishedBy": "Von",
+  "forms.columnChangelog": "Änderungsnotiz",
+  "forms.versionCurrent": "Aktuell",
+  "forms.versionNoChangelog": "Keine Änderungsnotiz",
+  "forms.versionPublisherUnknown": "Unbekannt",
+  "forms.restore": "Wiederherstellen",
+  "forms.restoreTitle": "Version {version} wiederherstellen",
+  "forms.restoreText":
+    "Fragen und E-Mail-Vorlage der Version {version} ersetzen den Entwurf. Änderungen im Entwurf, die noch nicht veröffentlicht sind, gehen dabei verloren. Besucher sehen weiter Version {current}, bis der Entwurf veröffentlicht ist.",
+  "forms.restoreSubmit": "Wiederherstellen",
+  "forms.restored":
+    "Version {version} ist jetzt im Entwurf. Veröffentlicht wird sie als Version {next}.",
+  "forms.discard": "Änderungen verwerfen",
+  "forms.discardTitle": "Änderungen verwerfen",
+  "forms.discardText":
+    "Fragen und E-Mail-Vorlage im Entwurf werden auf die aktuelle Version {version} zurückgesetzt. Alle Änderungen seit dem letzten Veröffentlichen gehen verloren.",
+  "forms.discardSubmit": "Änderungen verwerfen",
+  "forms.discarded": "Der Entwurf entspricht wieder Version {version}.",
+  "forms.resetWaitsForSave":
+    "Der Entwurf hat Änderungen, die noch nicht gespeichert sind. Das ist möglich, sobald sie gespeichert sind.",
   "forms.cancel": "Abbrechen",
   "forms.close": "Schließen",
   "forms.recipients": "Empfänger",
@@ -219,6 +247,9 @@ export const de = {
     "Der Inhalt darf höchstens {max} Zeichen lang sein.",
   "forms.errorChangelogTooLong":
     "Die Änderungsnotiz darf höchstens {max} Zeichen lang sein.",
+  "forms.errorVersionNotFound": "Diese Version gibt es nicht.",
+  "forms.errorDiscardUnpublished":
+    "Das Formular ist noch nicht veröffentlicht. Es gibt keine Version, auf die der Entwurf zurückgesetzt werden kann.",
   "forms.errorPublishEmpty":
     "Der Entwurf hat noch keine Fragen. Bitte im Designer mindestens eine Frage anlegen.",
   "forms.errorRecipientInvalid":
@@ -403,6 +434,12 @@ export const de = {
   "audit.summary.formSettingChanged": "{name}: {from} → {to}",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
+  "audit.action.formVersionRestored": "Version wiederhergestellt",
+  "audit.summary.formVersionRestored":
+    "{name}: Version {version} in den Entwurf übernommen",
+  "audit.action.formDraftDiscarded": "Änderungen verworfen",
+  "audit.summary.formDraftDiscarded":
+    "{name}: Entwurf auf Version {version} zurückgesetzt",
   "audit.action.settingsOriginsChanged": "Erlaubte Websites geändert",
   "audit.action.settingsRecipientDomainsChanged":
     "Erlaubte Empfänger-Domains geändert",

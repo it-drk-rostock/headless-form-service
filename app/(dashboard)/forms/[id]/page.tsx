@@ -1,10 +1,11 @@
-import { SimpleGrid, Stack, Text } from "@mantine/core";
+import { Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
   getCurrentVersion,
   getForm,
   getFormDraft,
+  listFormVersions,
 } from "@/lib/forms/queries.ts";
 import { formView } from "@/lib/forms/types.ts";
 import { formatDate, t } from "@/lib/i18n/index.ts";
@@ -14,12 +15,14 @@ import {
   CurrentVersionBadge,
   CurrentVersionDetails,
 } from "./CurrentVersion.tsx";
+import { DiscardButton } from "./DraftReset.tsx";
 import { DraftStatusProvider } from "./DraftStatus.tsx";
 import { EmailTemplateEditor } from "./EmailTemplateEditor.tsx";
 import { FormDesigner } from "./FormDesigner.tsx";
 import { FormSettings } from "./FormSettings.tsx";
 import { FormViews } from "./FormViews.tsx";
 import { PublishButton } from "./PublishButton.tsx";
+import { VersionHistory } from "./VersionHistory.tsx";
 
 export async function generateMetadata({
   params,
@@ -29,11 +32,13 @@ export async function generateMetadata({
 }
 
 /**
- * A form: the designer and the email editor on its draft, and its settings
- * (`?view=email`, `?view=settings`), with the version visitors see above
- * all three and *Veröffentlichen* next to the draft's editors. Forms of
- * teams the person does not belong to are not found (RLS); every member of
- * the owning team may edit the draft, publish it and change the settings.
+ * A form: the designer and the email editor on its draft, its version
+ * history and its settings (`?view=email`, `?view=versions`,
+ * `?view=settings`), with the version visitors see above all of them and
+ * *Veröffentlichen* and *Änderungen verwerfen* next to the draft's editors.
+ * Forms of teams the person does not belong to are not found (RLS); every
+ * member of the owning team may edit the draft, publish it, restore a
+ * version, discard changes and change the settings.
  */
 export default async function FormPage({
   params,
@@ -42,13 +47,21 @@ export default async function FormPage({
   const { id } = await params;
   const [form, draft] = await Promise.all([getForm(id), getFormDraft(id)]);
   if (!form || !draft) notFound();
-  const current = await getCurrentVersion(form);
-  const publish = (
-    <PublishButton
-      formId={form.id}
-      currentVersion={form.currentVersion}
-      hasRecipients={form.recipients.length > 0}
-    />
+  const [current, versions] = await Promise.all([
+    getCurrentVersion(form),
+    listFormVersions(form.id),
+  ]);
+  const draftActions = (
+    <Group gap="xs" wrap="nowrap">
+      {form.currentVersion !== null && (
+        <DiscardButton formId={form.id} currentVersion={form.currentVersion} />
+      )}
+      <PublishButton
+        formId={form.id}
+        currentVersion={form.currentVersion}
+        hasRecipients={form.recipients.length > 0}
+      />
+    </Group>
   );
 
   return (
@@ -62,8 +75,8 @@ export default async function FormPage({
         initialView={formView((await searchParams).view)}
         actions={{
           // Settings have their own primary button (ui-design §1).
-          designer: publish,
-          email: publish,
+          designer: draftActions,
+          email: draftActions,
         }}
         status={<CurrentVersionBadge current={current} />}
         views={{
@@ -73,6 +86,13 @@ export default async function FormPage({
               formId={form.id}
               formName={form.name}
               initialTemplate={draft.emailTemplate}
+            />
+          ),
+          versions: (
+            <VersionHistory
+              formId={form.id}
+              versions={versions}
+              currentVersion={form.currentVersion}
             />
           ),
           settings: (

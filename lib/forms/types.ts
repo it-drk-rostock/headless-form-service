@@ -37,7 +37,12 @@ export function formStatus(form: {
 }
 
 /** The views of a form's page; the first, the designer, is the default. */
-export const FORM_VIEWS = ["designer", "email", "settings"] as const;
+export const FORM_VIEWS = [
+  "designer",
+  "email",
+  "versions",
+  "settings",
+] as const;
 export type FormView = (typeof FORM_VIEWS)[number];
 
 /** The view a `?view=` search parameter asks for, the designer if none or unknown. */
