@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { hashFormPassSecret } from "../../../lib/shared/form-pass.ts";
 import type { RateLimit } from "../_shared/rate-limit.ts";
 import {
   decryptSubmission,
@@ -17,6 +18,8 @@ const ORIGIN = "https://www.drk-rostock.de";
 const FORM = "3f6c1a52-8d0e-4b7a-9c1d-2e5f8a9b0c1d";
 const SUBMISSION = "0b9c2f4e-6a1d-4e8b-9f3c-5d7e1a2b4c6d";
 const TOKEN = "turnstile-token-from-the-widget";
+const PASS_SECRET = "a-secret-shown-once-in-the-form-pass-link";
+const PASS_ID = "aa9c2f4e-6a1d-4e8b-9f3c-5d7e1a2b4c6d";
 const SCHEMA = {
   pages: [
     {
@@ -55,6 +58,7 @@ function fakes(
   const stats = new Map<string, { formId: string; version: number }>();
   const messageIds = new Map<string, string>();
   const published: PublishRequest[] = [];
+  const queuedMessages = new Map<string, string>();
   const hits = new Map<string, number>();
   const verified: { token: string; ip: string }[] = [];
   const deps: SubmitFormDeps = {
@@ -70,6 +74,8 @@ function fakes(
       verified.push({ token, ip });
       return token === TOKEN;
     },
+    claimPass: async () => null,
+    finishPass: async () => {},
     // Like `queue_submission`: false only once QStash's message ID is kept.
     queue: async ({ submissionId, formId, version }) => {
       if (messageIds.has(submissionId)) return false;
@@ -77,15 +83,19 @@ function fakes(
       return true;
     },
     unqueue: async (submissionId) => {
-      stats.delete(submissionId);
+      if (!messageIds.has(submissionId)) stats.delete(submissionId);
     },
     recordMessage: async (submissionId, messageId) => {
       messageIds.set(submissionId, messageId);
     },
     encrypt: (ids, payload) => encryptSubmission(keys, ids, payload),
     publish: async (request) => {
+      const existing = queuedMessages.get(request.deduplicationId);
+      if (existing) return { messageId: existing };
       published.push(request);
-      return { messageId: `msg_${published.length}` };
+      const messageId = `msg_${published.length}`;
+      queuedMessages.set(request.deduplicationId, messageId);
+      return { messageId };
     },
   };
   return { deps, stats, messageIds, published, hits, verified };
@@ -127,6 +137,387 @@ async function decrypted(request: PublishRequest) {
     encrypted,
   );
 }
+
+async function protectedFakes() {
+  const fake = fakes({
+    [`${FORM}/2`]: {
+      schema: SCHEMA,
+      accessType: "protected",
+      turnstileEnabled: true,
+      isClosed: false,
+    },
+  });
+  const tokenHash = await hashFormPassSecret(PASS_SECRET);
+  const pass = { useCount: 0, maxUses: 1 };
+  const claims = new Map<string, { active: number; accepted: boolean }>();
+  fake.deps.claimPass = async ({ formId, submissionId }, hash) => {
+    if (formId !== FORM || hash !== tokenHash) {
+      return null;
+    }
+    let claim = claims.get(submissionId);
+    if (!claim) {
+      if (pass.useCount >= pass.maxUses) return null;
+      pass.useCount += 1;
+      claim = { active: 0, accepted: false };
+      claims.set(submissionId, claim);
+    }
+    claim.active += 1;
+    return PASS_ID;
+  };
+  fake.deps.finishPass = async (submissionId, accepted) => {
+    const claim = claims.get(submissionId);
+    if (!claim || claim.active === 0) return;
+    claim.active -= 1;
+    claim.accepted ||= accepted;
+    if (claim.active === 0 && !claim.accepted) {
+      claims.delete(submissionId);
+      pass.useCount -= 1;
+    }
+  };
+  const unqueue = fake.deps.unqueue;
+  fake.deps.unqueue = async (submissionId) => {
+    if (!claims.has(submissionId)) await unqueue(submissionId);
+  };
+  return { ...fake, pass };
+}
+
+describe("protected submissions", () => {
+  it.each([
+    undefined,
+    null,
+    "",
+    42,
+    {},
+    "unknown-secret",
+  ])("refuses an invalid pass %j without queueing", async (formPass) => {
+    const { deps, pass, stats, published } = await protectedFakes();
+
+    const response = await handleSubmitForm(
+      post(body({ form_pass: formPass })),
+      deps,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "form_pass_invalid" });
+    expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(pass.useCount).toBe(0);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+  });
+
+  it("accepts a valid form pass once and carries its ID only inside the ciphertext", async () => {
+    const { deps, pass, published } = await protectedFakes();
+
+    const response = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(pass.useCount).toBe(1);
+    expect(await decrypted(published[0])).toEqual({
+      answers: { vorname: "Erika", email: "erika@example.org" },
+      pass_id: PASS_ID,
+    });
+    expect(JSON.stringify(published)).not.toContain(PASS_SECRET);
+    expect(JSON.stringify(published)).not.toContain(PASS_ID);
+  });
+
+  it("accepts only one concurrent submission with a single-use pass", async () => {
+    const { deps, pass, published } = await protectedFakes();
+    const publish = deps.publish;
+    let startPublish = () => {};
+    let finishPublish = () => {};
+    const publishing = new Promise<void>((resolve) => {
+      startPublish = resolve;
+    });
+    const finish = new Promise<void>((resolve) => {
+      finishPublish = resolve;
+    });
+    deps.publish = async (request) => {
+      startPublish();
+      await finish;
+      return publish(request);
+    };
+
+    const first = handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+    await publishing;
+    const second = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET, submission_id: PASS_ID })),
+      deps,
+    );
+    finishPublish();
+
+    expect((await first).status).toBe(202);
+    expect(second.status).toBe(403);
+    expect(pass.useCount).toBe(1);
+    expect(published).toHaveLength(1);
+    expect(
+      (
+        await handleSubmitForm(
+          post(body({ form_pass: PASS_SECRET, submission_id: PASS_ID })),
+          deps,
+        )
+      ).status,
+    ).toBe(403);
+  });
+
+  it("returns the use after a failed publish, so the same submission can be retried", async () => {
+    const { deps, pass, stats, published } = await protectedFakes();
+    const publish = deps.publish;
+    deps.publish = async () => {
+      throw new Error("QStash unavailable");
+    };
+
+    const response = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+
+    expect(response.status).toBe(503);
+    expect(pass.useCount).toBe(0);
+    expect(stats.size).toBe(0);
+    deps.publish = publish;
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(202);
+    expect(pass.useCount).toBe(1);
+    expect(published).toHaveLength(1);
+  });
+
+  it.each([
+    "encrypt",
+    "queue",
+  ] as const)("returns the use if %s fails before publishing", async (step) => {
+    const { deps, pass, published } = await protectedFakes();
+    deps[step] = async () => {
+      throw new Error("dependency unavailable");
+    };
+
+    const response = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+
+    expect(response.status).toBe(500);
+    expect(pass.useCount).toBe(0);
+    expect(published).toEqual([]);
+  });
+
+  it("does not count a confirmed retry as a new use", async () => {
+    const { deps, pass, published } = await protectedFakes();
+    pass.maxUses = 2;
+    await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps);
+
+    const response = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+
+    expect(response.status).toBe(202);
+    expect(pass.useCount).toBe(1);
+    expect(published).toHaveLength(1);
+  });
+
+  it("retains only one use for concurrent retries of the same submission", async () => {
+    const { deps, pass } = await protectedFakes();
+    pass.maxUses = 2;
+    let startPublish = () => {};
+    let finishPublish = () => {};
+    const publishing = new Promise<void>((resolve) => {
+      startPublish = resolve;
+    });
+    const finish = new Promise<void>((resolve) => {
+      finishPublish = resolve;
+    });
+    const publish = deps.publish;
+    let attempts = 0;
+    deps.publish = async (request) => {
+      attempts += 1;
+      if (attempts === 1) {
+        startPublish();
+        await finish;
+      }
+      return publish(request);
+    };
+
+    const first = handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+    await publishing;
+    const second = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+    finishPublish();
+
+    expect((await first).status).toBe(202);
+    expect(second.status).toBe(202);
+    expect(pass.useCount).toBe(1);
+  });
+
+  it("does not consume another use on a retry after message-ID recording failed", async () => {
+    const { deps, pass } = await protectedFakes();
+    pass.maxUses = 2;
+    deps.recordMessage = async () => {
+      throw new Error("database unavailable");
+    };
+    await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps);
+
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(202);
+    expect(pass.useCount).toBe(1);
+  });
+
+  it.each([
+    "first",
+    "second",
+    "both",
+  ])("settles one shared reservation when %s concurrent publish fails", async (failedAttempt) => {
+    const { deps, pass, stats, published } = await protectedFakes();
+    let startPublish = () => {};
+    let finishPublish = () => {};
+    const publishing = new Promise<void>((resolve) => {
+      startPublish = resolve;
+    });
+    const finish = new Promise<void>((resolve) => {
+      finishPublish = resolve;
+    });
+    const publish = deps.publish;
+    let attempts = 0;
+    deps.publish = async (request) => {
+      const attempt = ++attempts;
+      if (attempt === 1) {
+        startPublish();
+        await finish;
+      }
+      if (
+        failedAttempt === "both" ||
+        failedAttempt === (attempt === 1 ? "first" : "second")
+      ) {
+        throw new Error("QStash unavailable");
+      }
+      return publish(request);
+    };
+
+    const first = handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+    await publishing;
+    const second = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET })),
+      deps,
+    );
+    finishPublish();
+
+    expect((await first).status).toBe(failedAttempt === "second" ? 202 : 503);
+    expect(second.status).toBe(failedAttempt === "first" ? 202 : 503);
+    const acceptedCount = failedAttempt === "both" ? 0 : 1;
+    expect(pass.useCount).toBe(acceptedCount);
+    expect(stats.size).toBe(acceptedCount);
+    expect(published).toHaveLength(acceptedCount);
+  });
+
+  it("still releases the claim when removing the stats row fails", async () => {
+    const { deps, pass } = await protectedFakes();
+    deps.publish = async () => {
+      throw new Error("QStash unavailable");
+    };
+    deps.unqueue = async () => {
+      throw new Error("database unavailable");
+    };
+
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(503);
+    expect(pass.useCount).toBe(0);
+  });
+
+  it("returns 503 and leaves the reservation intact if claim cleanup fails", async () => {
+    const { deps, stats } = await protectedFakes();
+    deps.publish = async () => {
+      throw new Error("QStash unavailable");
+    };
+    deps.finishPass = async () => {
+      throw new Error("database unavailable");
+    };
+
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(503);
+    expect(stats.size).toBe(1);
+  });
+
+  it("retains the use after acceptance even if recording the message ID fails", async () => {
+    const { deps, pass, published } = await protectedFakes();
+    deps.recordMessage = async () => {
+      throw new Error("database unavailable");
+    };
+
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(202);
+    expect(pass.useCount).toBe(1);
+    expect(published).toHaveLength(1);
+  });
+
+  it("fails closed if the database cannot claim the pass", async () => {
+    const { deps, pass, stats, published } = await protectedFakes();
+    deps.claimPass = async () => {
+      throw new Error("database unavailable");
+    };
+
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(500);
+    expect(pass.useCount).toBe(0);
+    expect(stats.size).toBe(0);
+    expect(published).toEqual([]);
+  });
+
+  it.each([
+    [{ honeypot: "spam" }, 202],
+    [{ turnstile_token: "" }, 403],
+    [{ answers: {} }, 422],
+  ])("does not consume a pass before earlier checks finish (%j)", async (overrides, status) => {
+    const { deps, pass, published } = await protectedFakes();
+
+    const response = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET, ...overrides })),
+      deps,
+    );
+
+    expect(response.status).toBe(status);
+    expect(pass.useCount).toBe(0);
+    expect(published).toEqual([]);
+  });
+
+  it("ignores a supplied pass on a public form", async () => {
+    const { deps, published } = fakes();
+    deps.claimPass = async () => {
+      throw new Error("public forms must not claim a pass");
+    };
+
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(202);
+    expect((await decrypted(published[0])).pass_id).toBeNull();
+  });
+});
 
 describe("handleSubmitForm", () => {
   it("accepts a submission: queued, encrypted, published once", async () => {

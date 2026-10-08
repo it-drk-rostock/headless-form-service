@@ -6,9 +6,10 @@ import { createRoot } from "react-dom/client";
 import { Model, surveyLocalization } from "survey-core";
 import surveyCss from "survey-core/survey-core.min.css";
 import { Survey } from "survey-react-ui";
+import { FORM_PASS_PARAM } from "../lib/shared/form-pass.ts";
 import { loadForm } from "./load.ts";
 import { messages, submitMessages } from "./messages.ts";
-import { newSubmissionId, submitForm } from "./submit.ts";
+import { newSubmissionId, type Submission, submitForm } from "./submit.ts";
 import { type BotCheck, createBotCheck } from "./turnstile.ts";
 
 // Set by the bundler from NEXT_PUBLIC_SUPABASE_URL.
@@ -73,9 +74,11 @@ async function mount(element: HTMLElement): Promise<void> {
   showMessage(element, messages.loading, "status");
 
   const formId = element.dataset.form ?? "";
+  const pageUrl = window.location.href;
+  const formPass = new URL(pageUrl).searchParams.get(FORM_PASS_PARAM);
   const result = await loadForm(formId, {
     endpoint: __LOAD_FORM_URL__,
-    pageUrl: window.location.href,
+    pageUrl,
     fetch: (url) => fetch(url, { signal: timeout() }),
   });
   if (result.kind === "error") {
@@ -102,7 +105,7 @@ async function mount(element: HTMLElement): Promise<void> {
     const botCheck = createBotCheck(turnstileHost, result.turnstileSiteKey);
     sendOnComplete(
       model,
-      { formId, version: result.version },
+      { formId, version: result.version, formPass },
       botCheck,
       honeypot,
     );
@@ -131,7 +134,11 @@ async function mount(element: HTMLElement): Promise<void> {
  */
 function sendOnComplete(
   model: Model,
-  { formId, version }: { formId: string; version: number },
+  {
+    formId,
+    version,
+    formPass,
+  }: Pick<Submission, "formId" | "version" | "formPass">,
   botCheck: BotCheck,
   honeypot: Honeypot,
 ): void {
@@ -159,6 +166,7 @@ function sendOnComplete(
         version,
         submissionId,
         answers: model.data,
+        formPass,
         turnstileToken: check.token,
         honeypot: honeypot.input.value,
       },

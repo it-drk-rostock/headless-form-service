@@ -63,6 +63,24 @@ Deno.serve((request) =>
           };
     },
     verifyTurnstile,
+    claimPass: async ({ formId, submissionId }, tokenHash) => {
+      const { data, error } = await supabase
+        .rpc("claim_form_pass", {
+          form: formId,
+          token_hash: tokenHash,
+          submission: submissionId,
+        })
+        .maybeSingle<{ id: string }>();
+      if (error) throw error;
+      return data?.id ?? null;
+    },
+    finishPass: async (submissionId, accepted) => {
+      const { error } = await supabase.rpc("finish_form_pass_claim", {
+        submission: submissionId,
+        accepted,
+      });
+      if (error) throw error;
+    },
     queue: async ({ submissionId, formId, version }) => {
       const { data, error } = await supabase.rpc("queue_submission", {
         submission: submissionId,

@@ -68,6 +68,46 @@ describe("submitForm", () => {
     expect(sent.honeypot).toBe("spam");
   });
 
+  it("sends the form pass from a protected form link", async () => {
+    const { fetch, requests } = fakeFetch(() =>
+      json({ status: "accepted" }, 202),
+    );
+
+    await submitForm(
+      { ...SUBMISSION, formPass: "secret-from-the-form-pass-link" },
+      { endpoint: ENDPOINT, fetch },
+    );
+
+    expect(JSON.parse(String(requests[0].init.body))).toEqual({
+      form_id: SUBMISSION.formId,
+      version: 3,
+      submission_id: SUBMISSION.submissionId,
+      answers: { vorname: "Erika" },
+      form_pass: "secret-from-the-form-pass-link",
+      turnstile_token: "token-from-the-widget",
+      honeypot: "",
+    });
+  });
+
+  it.each([
+    undefined,
+    null,
+    "",
+  ])("omits a missing pass %j", async (formPass) => {
+    const { fetch, requests } = fakeFetch(() =>
+      json({ status: "accepted" }, 202),
+    );
+
+    await submitForm(
+      { ...SUBMISSION, formPass },
+      { endpoint: ENDPOINT, fetch },
+    );
+
+    expect(JSON.parse(String(requests[0].init.body))).not.toHaveProperty(
+      "form_pass",
+    );
+  });
+
   it("reports a refused Turnstile token as a failed security check", async () => {
     const { fetch } = fakeFetch(() =>
       json({ error: "turnstile_invalid" }, 403),

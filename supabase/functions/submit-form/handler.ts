@@ -4,6 +4,7 @@
 // are stored nowhere on the way.
 import { answerProblems } from "../../../lib/shared/answer-validation.ts";
 import { type Answers, pickAnswers } from "../../../lib/shared/answers.ts";
+import { hashFormPassSecret } from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isObject } from "../../../lib/shared/object.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
@@ -49,6 +50,10 @@ export type SubmitFormDeps = {
     version: number,
   ) => Promise<SubmittedForm | null>;
   verifyTurnstile: TurnstileVerifier;
+  /** Atomically uses a valid pass for this form; null when it is invalid. */
+  claimPass: (ids: SubmissionIds, tokenHash: string) => Promise<string | null>;
+  /** Finishes this attempt; retries of one submission share one reserved use. */
+  finishPass: (submissionId: string, accepted: boolean) => Promise<void>;
   /**
    * Writes the `queued` stats row. False once QStash's message ID is recorded
    * for that ID: a retry of a submission QStash already has.
@@ -114,7 +119,7 @@ async function submit(
   if (text === null) return reply({ error: "payload_too_large" }, 413);
   const submission = parseSubmission(text);
   if (submission === null) return reply({ error: "request_invalid" }, 400);
-  const { ids, answers, turnstileToken, honeypot } = submission;
+  const { ids, answers, formPass, turnstileToken, honeypot } = submission;
 
   // Only bots fill the hidden field. They are told it worked, so they don't
   // try again differently, and nothing is checked, stored or sent.
@@ -144,18 +149,29 @@ async function submit(
     return reply({ error: "answers_invalid" }, 422);
   }
 
-  // Protected forms need a claimed form pass, which ticket 27 adds. Until
-  // then nobody can submit them.
+  let passId: string | null = null;
   if (form.accessType === "protected") {
-    return reply({ error: "form_pass_invalid" }, 403);
+    if (formPass === "") return reply({ error: "form_pass_invalid" }, 403);
+    passId = await deps.claimPass(ids, await hashFormPassSecret(formPass));
+    if (passId === null) return reply({ error: "form_pass_invalid" }, 403);
   }
 
-  const encrypted = await deps.encrypt(ids, { answers: picked, pass_id: null });
+  let encrypted: EncryptedSubmission;
+  let queued: boolean;
+  try {
+    encrypted = await deps.encrypt(ids, { answers: picked, pass_id: passId });
+    queued = await deps.queue(ids);
+  } catch (error) {
+    await finishClaim(passId, ids.submissionId, false, deps);
+    throw error;
+  }
 
-  // A retry of a submission QStash already has. A retry whose first publish
-  // was never confirmed is published again; the deduplication ID keeps that
-  // to one message.
-  if (!(await deps.queue(ids))) return accepted();
+  // A confirmed retry is no new submission, so it keeps no extra pass use.
+  // Unconfirmed publishes are retried under QStash's deduplication ID.
+  if (!queued) {
+    await finishClaim(passId, ids.submissionId, false, deps);
+    return accepted();
+  }
 
   let messageId: string;
   try {
@@ -171,6 +187,7 @@ async function submit(
     }));
   } catch (error) {
     console.error("submit-form could not publish to QStash", error);
+    await finishClaim(passId, ids.submissionId, false, deps);
     // Without its row the visitor can send the same submission again.
     try {
       await deps.unqueue(ids.submissionId);
@@ -180,6 +197,8 @@ async function submit(
     return reply({ error: "queue_unavailable" }, 503);
   }
 
+  await finishClaim(passId, ids.submissionId, true, deps);
+
   // The message ID only helps find a dead-lettered message later, so the
   // submission is accepted without it.
   try {
@@ -188,6 +207,21 @@ async function submit(
     console.error("submit-form could not keep the message ID", error);
   }
   return accepted();
+}
+
+/** Cleanup is best effort; a database outage must not hide the original error. */
+async function finishClaim(
+  passId: string | null,
+  submissionId: string,
+  accepted: boolean,
+  deps: SubmitFormDeps,
+) {
+  if (passId === null) return;
+  try {
+    await deps.finishPass(submissionId, accepted);
+  } catch (error) {
+    console.error("submit-form could not finish the form pass claim", error);
+  }
 }
 
 /**
@@ -244,6 +278,8 @@ async function readBody(request: Request): Promise<string | null> {
 function parseSubmission(text: string): {
   ids: SubmissionIds;
   answers: Answers;
+  /** Empty for a missing or malformed pass; only protected forms need it. */
+  formPass: string;
   /** Empty when there is none; only forms with Turnstile on need one. */
   turnstileToken: string;
   /** The hidden field's value, empty from people. */
@@ -262,6 +298,7 @@ function parseSubmission(text: string): {
     version,
     submission_id,
     answers,
+    form_pass,
     turnstile_token,
     honeypot = "",
   } = body;
@@ -286,6 +323,7 @@ function parseSubmission(text: string): {
       version,
     },
     answers,
+    formPass: typeof form_pass === "string" ? form_pass : "",
     turnstileToken: typeof turnstile_token === "string" ? turnstile_token : "",
     honeypot: honeypot.trim(),
   };

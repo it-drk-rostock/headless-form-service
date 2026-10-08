@@ -22,6 +22,8 @@ export type Submission = {
   /** Generated once per form load and sent again on every retry. */
   submissionId: string;
   answers: Record<string, unknown>;
+  /** The secret from the hosting page's form pass link, when present. */
+  formPass?: string | null;
   /** The widget's current token; null for forms without Turnstile. */
   turnstileToken: string | null;
   /** The hidden field, which only bots fill. */
@@ -47,6 +49,7 @@ export async function submitForm(
         version: submission.version,
         submission_id: submission.submissionId,
         answers: submission.answers,
+        ...(submission.formPass ? { form_pass: submission.formPass } : {}),
         ...(submission.turnstileToken === null
           ? {}
           : { turnstile_token: submission.turnstileToken }),
