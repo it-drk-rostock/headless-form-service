@@ -1,5 +1,5 @@
 // Mailjet's Send API v3.1, which carries notification emails (blueprint
-// §4.4) and, later, failure alerts (ticket 30). Plain `fetch`, so it runs
+// §4.4) and failure alerts (§4.5). Plain `fetch`, so it runs
 // under Deno and under Vitest alike.
 
 export type Mail = {

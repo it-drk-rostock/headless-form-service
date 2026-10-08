@@ -8,7 +8,11 @@ import {
   decryptSubmission,
   parseEncryptionKeys,
 } from "../_shared/submission-crypto.ts";
-import { type DispatchedSubmission, handleDispatchEmail } from "./handler.ts";
+import {
+  type DispatchedSubmission,
+  handleDispatchEmail,
+  type RecordedFailure,
+} from "./handler.ts";
 
 const supabase = createServiceClient("dispatch-email");
 
@@ -91,6 +95,32 @@ Deno.serve((request) =>
         submission: submissionId,
       });
       if (error) throw error;
+    },
+    recordFailure: async ({ submissionId, formId }, reason) => {
+      const { data, error } = await supabase
+        .rpc("record_delivery_failure", {
+          submission: submissionId,
+          form: formId,
+          reason,
+        })
+        .maybeSingle<{
+          form_name: string;
+          team_name: string;
+          team_admins: string[];
+          submitted_at: string | null;
+          status: RecordedFailure["status"];
+        }>();
+      if (error) throw error;
+      return data === null
+        ? null
+        : {
+            formName: data.form_name,
+            teamName: data.team_name,
+            teamAdmins: data.team_admins,
+            submittedAt:
+              data.submitted_at === null ? null : new Date(data.submitted_at),
+            status: data.status,
+          };
     },
     senderEmail,
   }),

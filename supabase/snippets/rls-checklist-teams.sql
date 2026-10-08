@@ -716,12 +716,16 @@ begin
     raise exception 'RLS check 32 failed: anon can call count_form_load';
   end if;
   -- /dispatch-email's functions run as their owner, so a stray grant would
-  -- let anyone read a form's recipients or mark a submission sent.
+  -- let anyone read a form's recipients, mark a submission sent or failed,
+  -- or learn a team's Team Admins.
   if has_function_privilege('anon', 'public.dispatch_submission(uuid, uuid, integer)', 'execute') then
     raise exception 'RLS check 32 failed: anon can call dispatch_submission';
   end if;
   if has_function_privilege('anon', 'public.mark_submission_sent(uuid)', 'execute') then
     raise exception 'RLS check 32 failed: anon can call mark_submission_sent';
+  end if;
+  if has_function_privilege('anon', 'public.record_delivery_failure(uuid, uuid, text)', 'execute') then
+    raise exception 'RLS check 32 failed: anon can call record_delivery_failure';
   end if;
 end $$;
 

@@ -12,6 +12,7 @@ import {
   type DispatchEmailDeps,
   type DispatchedSubmission,
   handleDispatchEmail,
+  type RecordedFailure,
 } from "./handler.ts";
 
 const FORM = "3f6c1a52-8d0e-4b7a-9c1d-2e5f8a9b0c1d";
@@ -59,7 +60,10 @@ async function message(
 }
 
 /** In-memory fakes: one queued submission, a mailer, the stats status. */
-function fakes(overrides: Partial<DispatchedSubmission> = {}) {
+function fakes(
+  overrides: Partial<DispatchedSubmission> = {},
+  failureOverrides: Partial<RecordedFailure> = {},
+) {
   const submission: DispatchedSubmission = {
     formName: "Kursanmeldung",
     recipients: ["kurse@drk-rostock.de", "leitung@drk-rostock.de"],
@@ -78,6 +82,15 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
     [PASS, { ticket: "T-4711", kampagne: "Herbst <2026>" }],
   ]);
   const passLoads: string[] = [];
+  const failures: { submissionId: string; reason: string }[] = [];
+  const failure: RecordedFailure = {
+    formName: "Kursanmeldung",
+    teamName: "Erste Hilfe",
+    teamAdmins: ["anna@drk-rostock.de", "ben@drk-rostock.de"],
+    submittedAt: new Date("2026-10-06T12:30:00Z"),
+    status: "failed",
+    ...failureOverrides,
+  };
   const deps: DispatchEmailDeps = {
     verifySignature: async (signature) => signature === SIGNATURE,
     decrypt: (ids, envelope) => decryptSubmission(keys, ids, envelope),
@@ -97,9 +110,20 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
     markSent: async (submissionId) => {
       statuses.set(submissionId, "sent");
     },
+    recordFailure: async (requested, reason) => {
+      if (
+        requested.submissionId !== SUBMISSION ||
+        requested.formId !== FORM ||
+        requested.version !== 2
+      ) {
+        return null;
+      }
+      failures.push({ submissionId: requested.submissionId, reason });
+      return failure;
+    },
     senderEmail: SENDER_EMAIL,
   };
-  return { deps, sent, statuses, passes, passLoads };
+  return { deps, sent, statuses, passes, passLoads, failures };
 }
 
 const deliver = (
@@ -481,6 +505,265 @@ describe("handleDispatchEmail", () => {
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "internal_error" });
+    expect(sent).toEqual([]);
+  });
+});
+
+/** Base64 of UTF-8 text, as QStash encodes bodies in callbacks. */
+function base64(text: string): string {
+  let binary = "";
+  for (const byte of new TextEncoder().encode(text)) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+/**
+ * QStash's failure callback once the retries are used up: the source
+ * message, and the last answer `/dispatch-email` gave it.
+ */
+async function failureCallback({
+  status = 502 as number | null,
+  body = JSON.stringify({ error: "mail_failed" }) as string | null,
+  source = undefined as unknown,
+} = {}) {
+  return {
+    ...(status === null ? {} : { status }),
+    header: { "content-type": ["application/json"] },
+    ...(body === null ? {} : { body: base64(body) }),
+    retried: 3,
+    maxRetries: 3,
+    dlqId: "1725323658779-0",
+    sourceMessageId: "msg_26hZCxZCuWyyTWPmSVBrNB882AMRP1TsgzpygELRcLW",
+    url: "https://example.test/dispatch-email",
+    method: "POST",
+    sourceHeader: { "content-type": ["application/json"] },
+    sourceBody: base64(JSON.stringify(source ?? (await message()))),
+    createdAt: 1_759_754_400_000,
+  };
+}
+
+describe("handleDispatchEmail, failure callback", () => {
+  it("marks the submission failed with the last answer as the reason", async () => {
+    const { deps, failures } = fakes();
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "failed" });
+    expect(failures).toEqual([
+      { submissionId: SUBMISSION, reason: "mail_failed (HTTP 502)" },
+    ]);
+  });
+
+  it("alerts the team's Team Admins from the service's sender, without submission data", async () => {
+    const { deps, sent } = fakes();
+
+    await handleDispatchEmail(deliver(await failureCallback()), deps);
+
+    expect(sent).toHaveLength(1);
+    const [mail] = sent;
+    expect(mail.from).toEqual({
+      email: SENDER_EMAIL,
+      name: "DRK Rostock Formular-Service",
+    });
+    expect(mail.to).toEqual(["anna@drk-rostock.de", "ben@drk-rostock.de"]);
+    expect(mail.replyTo).toBeUndefined();
+    expect(mail.subject).toBe("Zustellung fehlgeschlagen: Kursanmeldung");
+    expect(mail.customId).toBe(`failure-${SUBMISSION}`);
+    expect(mail.html).toContain("Kursanmeldung");
+    expect(mail.html).toContain("Erste Hilfe");
+    expect(mail.html).toContain("06.10.2026, 14:30");
+    expect(mail.html).toContain(SUBMISSION);
+    expect(mail.html).toContain("mail_failed (HTTP 502)");
+    // Never the answers: they are not even decrypted.
+    expect(mail.html).not.toContain("Erika");
+    expect(mail.html).not.toContain("Vorname");
+  });
+
+  it("does not decrypt the submission", async () => {
+    const { deps } = fakes();
+    deps.decrypt = async () => {
+      throw new Error("must not decrypt");
+    };
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("escapes the form and team names in the alert", async () => {
+    const { deps, sent } = fakes(
+      {},
+      { formName: "<b>Kurse</b>", teamName: "Erste & Hilfe" },
+    );
+
+    await handleDispatchEmail(deliver(await failureCallback()), deps);
+
+    expect(sent[0].html).toContain("&lt;b&gt;Kurse&lt;/b&gt;");
+    expect(sent[0].html).not.toContain("<b>Kurse</b>");
+    expect(sent[0].html).toContain("Erste &amp; Hilfe");
+    expect(sent[0].subject).toBe("Zustellung fehlgeschlagen: <b>Kurse</b>");
+  });
+
+  it("takes only the error code from the last answer as the reason", async () => {
+    const { deps, failures } = fakes();
+
+    await handleDispatchEmail(
+      deliver(
+        await failureCallback({
+          status: 422,
+          body: JSON.stringify({ error: "recipients_not_allowed" }),
+        }),
+      ),
+      deps,
+    );
+
+    expect(failures[0].reason).toBe("recipients_not_allowed (HTTP 422)");
+  });
+
+  it("keeps only the status of an answer that is not one of ours", async () => {
+    const { deps, failures } = fakes();
+
+    await handleDispatchEmail(
+      deliver(
+        await failureCallback({
+          status: 546,
+          body: '{"error":"Max Mustermann <max@example.com> failed"}',
+        }),
+      ),
+      deps,
+    );
+
+    expect(failures[0].reason).toBe("HTTP 546");
+  });
+
+  it("records a delivery that got no answer at all", async () => {
+    const { deps, failures } = fakes();
+
+    await handleDispatchEmail(
+      deliver(await failureCallback({ status: null, body: null })),
+      deps,
+    );
+
+    expect(failures[0].reason).toBe("no_response");
+  });
+
+  it("still alerts when the stats row is gone, with an unknown submission time", async () => {
+    const { deps, sent } = fakes({}, { submittedAt: null, status: null });
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].html).toContain("unbekannt");
+  });
+
+  it("leaves a submission that was sent after all alone, without an alert", async () => {
+    const { deps, sent } = fakes({}, { status: "sent" });
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "sent" });
+    expect(sent).toEqual([]);
+  });
+
+  it("answers 200 without an alert when the form is gone", async () => {
+    const { deps, sent } = fakes();
+    deps.recordFailure = async () => null;
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "form_not_found" });
+    expect(sent).toEqual([]);
+  });
+
+  it("answers 200 without an alert for a team without Team Admins", async () => {
+    const { deps, sent, failures } = fakes({}, { teamAdmins: [] });
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(failures).toHaveLength(1);
+    expect(sent).toEqual([]);
+  });
+
+  it("answers 502 so QStash retries the callback when the alert cannot be sent", async () => {
+    const { deps, failures } = fakes();
+    deps.send = async () => {
+      throw new Error("Mailjet answered 503");
+    };
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "alert_failed" });
+    // Marked all the same; the retry marks it again and sends the alert.
+    expect(failures).toHaveLength(1);
+  });
+
+  it("answers 500 when the failure cannot be recorded, without an alert", async () => {
+    const { deps, sent } = fakes();
+    deps.recordFailure = async () => {
+      throw new Error("connection refused");
+    };
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback()),
+      deps,
+    );
+
+    expect(response.status).toBe(500);
+    expect(sent).toEqual([]);
+  });
+
+  it("rejects a failure callback without a valid signature", async () => {
+    const { deps, sent, failures } = fakes();
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback(), { signature: "forged" }),
+      deps,
+    );
+
+    expect(response.status).toBe(401);
+    expect(failures).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it("answers 400 for a callback whose source message is not a queued submission", async () => {
+    const { deps, sent, failures } = fakes();
+
+    const response = await handleDispatchEmail(
+      deliver(await failureCallback({ source: { hello: "world" } })),
+      deps,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "request_invalid" });
+    expect(failures).toEqual([]);
     expect(sent).toEqual([]);
   });
 });

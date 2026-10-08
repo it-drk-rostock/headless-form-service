@@ -11,6 +11,7 @@ import {
 
 let db: PGlite;
 let max: string; // member of Erste Hilfe
+let firstAid: string;
 let form: string; // Erste Hilfe's form
 
 const SUBMISSION = "0b9c2f4e-6a1d-4e8b-9f3c-5d7e1a2b4c6d";
@@ -23,10 +24,12 @@ const questions = (name: string) => ({
 const DISPATCH = "select * from public.dispatch_submission($1, $2, $3)";
 const MARK_SENT = "select public.mark_submission_sent($1)";
 const QUEUE = "select public.queue_submission($1, $2, $3)";
+const RECORD_FAILURE =
+  "select * from public.record_delivery_failure($1, $2, $3)";
 
 beforeEach(async () => {
   db = await migratedDatabase();
-  const firstAid = await createTeam(db, "Erste Hilfe");
+  firstAid = await createTeam(db, "Erste Hilfe");
   max = await createAuthUser(db, "max@drk-rostock.de");
   await addTeamMember(db, firstAid, max, "member");
   const { rows } = await db.query<{ id: string }>(
@@ -174,6 +177,162 @@ describe("mark_submission_sent", () => {
   });
 });
 
+describe("record_delivery_failure", () => {
+  beforeEach(async () => {
+    const anna = await createAuthUser(db, "anna@drk-rostock.de");
+    const ben = await createAuthUser(db, "ben@drk-rostock.de");
+    await addTeamMember(db, firstAid, anna, "team_admin");
+    await addTeamMember(db, firstAid, ben, "team_admin");
+    // Team Admin of another team only.
+    const other = await createTeam(db, "Blutspende");
+    const carla = await createAuthUser(db, "carla@drk-rostock.de");
+    await addTeamMember(db, other, carla, "team_admin");
+  });
+
+  it("marks the submission failed with the reason, and only that one", async () => {
+    await publish(questions("vorname"));
+    await commitAs(db, "service", QUEUE, [SUBMISSION, form, 1]);
+    await commitAs(db, "service", QUEUE, [OTHER_SUBMISSION, form, 1]);
+
+    await commitAs(db, "service", RECORD_FAILURE, [
+      SUBMISSION,
+      form,
+      "mail_failed (HTTP 502)",
+    ]);
+
+    const { rows } = await db.query(
+      "select id, status, failure_reason from public.form_stats order by id",
+    );
+    expect(rows).toEqual([
+      {
+        id: SUBMISSION,
+        status: "failed",
+        failure_reason: "mail_failed (HTTP 502)",
+      },
+      { id: OTHER_SUBMISSION, status: "queued", failure_reason: null },
+    ]);
+  });
+
+  it("returns the form and team names, the Team Admins' addresses and the submission time", async () => {
+    await publish(questions("vorname"));
+    await commitAs(db, "service", QUEUE, [SUBMISSION, form, 1]);
+
+    const rows = await commitAs<Record<string, unknown>>(
+      db,
+      "service",
+      RECORD_FAILURE,
+      [SUBMISSION, form, "HTTP 500"],
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      form_name: "Kursanmeldung",
+      team_name: "Erste Hilfe",
+      team_admins: ["anna@drk-rostock.de", "ben@drk-rostock.de"],
+      status: "failed",
+    });
+    expect(rows[0].submitted_at).toBeInstanceOf(Date);
+  });
+
+  it("leaves a submission that was sent after all as it is", async () => {
+    await publish(questions("vorname"));
+    await commitAs(db, "service", QUEUE, [SUBMISSION, form, 1]);
+    await commitAs(db, "service", MARK_SENT, [SUBMISSION]);
+
+    const rows = await commitAs(db, "service", RECORD_FAILURE, [
+      SUBMISSION,
+      form,
+      "HTTP 500",
+    ]);
+
+    expect(rows).toMatchObject([{ status: "sent" }]);
+    const { rows: stats } = await db.query(
+      "select status, failure_reason from public.form_stats",
+    );
+    expect(stats).toEqual([{ status: "sent", failure_reason: null }]);
+  });
+
+  it("records a repeated failure again with the newest reason", async () => {
+    await publish(questions("vorname"));
+    await commitAs(db, "service", QUEUE, [SUBMISSION, form, 1]);
+    await commitAs(db, "service", RECORD_FAILURE, [
+      SUBMISSION,
+      form,
+      "HTTP 500",
+    ]);
+
+    const rows = await commitAs(db, "service", RECORD_FAILURE, [
+      SUBMISSION,
+      form,
+      "mail_failed (HTTP 502)",
+    ]);
+
+    expect(rows).toMatchObject([{ status: "failed" }]);
+    const { rows: stats } = await db.query(
+      "select failure_reason from public.form_stats",
+    );
+    expect(stats).toEqual([{ failure_reason: "mail_failed (HTTP 502)" }]);
+  });
+
+  it("still names whom to alert when the stats row is gone", async () => {
+    await publish(questions("vorname"));
+
+    const rows = await commitAs(db, "service", RECORD_FAILURE, [
+      SUBMISSION,
+      form,
+      "HTTP 500",
+    ]);
+
+    expect(rows).toMatchObject([
+      { form_name: "Kursanmeldung", submitted_at: null, status: null },
+    ]);
+  });
+
+  it("does not touch another form's submission with that ID", async () => {
+    await publish(questions("vorname"));
+    await commitAs(db, "service", QUEUE, [SUBMISSION, form, 1]);
+    const { rows } = await db.query<{ id: string }>(
+      "insert into public.forms (team_id, name) values ($1, 'Andere') returning id",
+      [firstAid],
+    );
+
+    await commitAs(db, "service", RECORD_FAILURE, [
+      SUBMISSION,
+      rows[0].id,
+      "HTTP 500",
+    ]);
+
+    expect(await status()).toBe("queued");
+  });
+
+  it("serves an archived form", async () => {
+    await publish(questions("vorname"));
+    await commitAs(db, "service", QUEUE, [SUBMISSION, form, 1]);
+    await db.query(
+      "update public.forms set archived_at = now() where id = $1",
+      [form],
+    );
+
+    expect(
+      await commitAs(db, "service", RECORD_FAILURE, [
+        SUBMISSION,
+        form,
+        "HTTP 500",
+      ]),
+    ).toMatchObject([{ status: "failed" }]);
+  });
+
+  it("returns nothing for a form that is gone", async () => {
+    expect(
+      await commitAs(db, "service", RECORD_FAILURE, [
+        SUBMISSION,
+        OTHER_SUBMISSION,
+        "HTTP 500",
+      ]),
+    ).toEqual([]);
+  });
+});
+
 describe("dispatch access", () => {
   it("gives visitors and signed-in people none of the functions", async () => {
     await publish(questions("vorname"));
@@ -182,6 +341,7 @@ describe("dispatch access", () => {
       for (const [query, params] of [
         [DISPATCH, [SUBMISSION, form, 1]],
         [MARK_SENT, [SUBMISSION]],
+        [RECORD_FAILURE, [SUBMISSION, form, "HTTP 500"]],
       ] as const) {
         await expect(
           queryAs(db, who, query, [...params]),

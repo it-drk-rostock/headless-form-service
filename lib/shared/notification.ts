@@ -432,16 +432,27 @@ const CELL =
  * version's questions. Titles and answers are escaped.
  */
 export function answersTable(schema: unknown, answers: Answers): string {
-  const rows: string[] = [];
+  const rows: [string, string][] = [];
   for (const question of tableQuestions(schema)) {
     const value = answerText(question, answers);
-    if (value === "") continue;
-    rows.push(
-      `<tr><th style="${CELL};font-weight:bold">${escapeHtml(question.title)}</th><td style="${CELL}">${escapeHtml(value).replaceAll("\n", "<br>")}</td></tr>`,
-    );
+    if (value !== "") rows.push([question.title, value]);
   }
   if (rows.length === 0) return "<p>Keine Angaben.</p>";
-  return `<table role="presentation" style="border-collapse:collapse;width:100%">${rows.join("")}</table>`;
+  return detailsTable(rows);
+}
+
+/**
+ * Label/value pairs as a two-column table, as in the answers table. Labels
+ * and values are escaped; line breaks in values are kept.
+ */
+export function detailsTable(rows: [label: string, value: string][]): string {
+  const cells = rows
+    .map(
+      ([label, value]) =>
+        `<tr><th style="${CELL};font-weight:bold">${escapeHtml(label)}</th><td style="${CELL}">${escapeHtml(value).replaceAll("\n", "<br>")}</td></tr>`,
+    )
+    .join("");
+  return `<table role="presentation" style="border-collapse:collapse;width:100%">${cells}</table>`;
 }
 
 type Question = {

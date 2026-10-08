@@ -36,7 +36,8 @@ const qstash = new Client({
   // 12 s). The deduplication ID makes a retried publish safe.
   retry: { retries: 2 },
 });
-// Where QStash delivers each submission.
+// Where QStash delivers each submission, and its failure callback once the
+// retries are used up (blueprint §4.5).
 const dispatchUrl = dispatchEmailUrl();
 
 Deno.serve((request) =>
@@ -105,6 +106,12 @@ Deno.serve((request) =>
     },
     encrypt: (ids, payload) => encryptSubmission(keys, ids, payload),
     publish: ({ body, deduplicationId, retries }) =>
-      qstash.publishJSON({ url: dispatchUrl, body, deduplicationId, retries }),
+      qstash.publishJSON({
+        url: dispatchUrl,
+        body,
+        deduplicationId,
+        retries,
+        failureCallback: dispatchUrl,
+      }),
   }),
 );

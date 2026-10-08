@@ -2,9 +2,11 @@
 // submission here. Only QStash may call it, which its signature proves. The
 // answers are decrypted only to render the notification email, which goes to
 // the form's recipients through Mailjet; nothing of them is stored or logged.
+// After QStash's last retry its failure callback comes here too (§4.5).
 import type { PassMetadata } from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import {
+  DEFAULT_SENDER_NAME,
   parseEmailTemplate,
   renderNotificationEmail,
   replyToAddress,
@@ -18,6 +20,14 @@ import {
   type SubmissionIds,
   type SubmissionPayload,
 } from "../_shared/submission-crypto.ts";
+import {
+  type FailureCallback,
+  parseFailureCallback,
+  renderFailureAlert,
+} from "./failure.ts";
+
+/** `public.submission_status`, the delivery status in `form_stats`. */
+export type SubmissionStatus = "queued" | "sent" | "failed";
 
 /** What the database knows about a queued submission and its form. */
 export type DispatchedSubmission = {
@@ -29,13 +39,28 @@ export type DispatchedSubmission = {
   schema: unknown;
   submittedAt: Date;
   /** Null when the stats row is gone; the email is sent all the same. */
-  status: "queued" | "sent" | "failed" | null;
+  status: SubmissionStatus | null;
   /** The form's name for the sender; empty for the service's own. */
   senderDisplayName: string;
   /** The question whose answer becomes Reply-To, if the form has one. */
   replyToQuestion: string | null;
   /** The global list as it is now; recipients elsewhere get nothing. */
   allowedRecipientDomains: string[];
+};
+
+/** A submission marked failed, and whom to alert (blueprint §4.5). */
+export type RecordedFailure = {
+  formName: string;
+  teamName: string;
+  /** The email addresses of the form's team's Team Admins. */
+  teamAdmins: string[];
+  /** Null when the stats row is gone. */
+  submittedAt: Date | null;
+  /**
+   * The row's status afterwards: `sent` is left as it is, since the email
+   * went out after all; null when the stats row is gone.
+   */
+  status: SubmissionStatus | null;
 };
 
 export type DispatchEmailDeps = {
@@ -58,6 +83,14 @@ export type DispatchEmailDeps = {
   /** Throws when Mailjet did not accept the email. */
   send: (mail: Mail) => Promise<void>;
   markSent: (submissionId: string) => Promise<void>;
+  /**
+   * Marks the submission `failed` with `reason`, unless it was `sent`. Null
+   * when the form is gone.
+   */
+  recordFailure: (
+    ids: SubmissionIds,
+    reason: string,
+  ) => Promise<RecordedFailure | null>;
   /** The global sender address (GLOSSARY, Sender). */
   senderEmail: string;
 };
@@ -93,6 +126,9 @@ async function dispatch(
   if (!signature || !(await deps.verifySignature(signature, body))) {
     return reply({ error: "signature_invalid" }, 401);
   }
+
+  const failure = parseFailureCallback(body);
+  if (failure !== null) return reportFailure(failure, deps);
 
   const message = parseQueuedSubmission(body);
   if (message === null) return reply({ error: "request_invalid" }, 400);
@@ -188,6 +224,62 @@ async function dispatch(
     );
   }
   return sentResponse();
+}
+
+/**
+ * Failure mode: marks the submission failed and alerts the team's Team
+ * Admins. A non-2xx answer makes QStash retry the callback, which marks it
+ * again and repeats the alert.
+ */
+async function reportFailure(
+  { ids, reason }: FailureCallback,
+  deps: DispatchEmailDeps,
+): Promise<Response> {
+  console.error(
+    `dispatch-email: delivery of ${ids.submissionId} failed: ${reason}`,
+  );
+  const recorded = await deps.recordFailure(ids, reason);
+  if (recorded === null) {
+    console.error(
+      `dispatch-email: form ${ids.formId} is gone, no failure alert for ${ids.submissionId}`,
+    );
+    return reply({ status: "form_not_found" }, 200);
+  }
+  if (recorded.status === "sent") return sentResponse();
+
+  if (recorded.teamAdmins.length === 0) {
+    console.error(
+      `dispatch-email: the team of form ${ids.formId} has no Team Admin to alert`,
+    );
+    return failedResponse();
+  }
+  const { subject, html } = renderFailureAlert({
+    formName: recorded.formName,
+    teamName: recorded.teamName,
+    ids,
+    submittedAt: recorded.submittedAt,
+    reason,
+  });
+  try {
+    await deps.send({
+      from: { email: deps.senderEmail, name: DEFAULT_SENDER_NAME },
+      to: recorded.teamAdmins,
+      subject,
+      html,
+      customId: `failure-${ids.submissionId}`,
+    });
+  } catch (error) {
+    console.error(
+      `dispatch-email could not alert about ${ids.submissionId}`,
+      error,
+    );
+    return reply({ error: "alert_failed" }, 502);
+  }
+  return failedResponse();
+}
+
+function failedResponse(): Response {
+  return reply({ status: "failed" }, 200);
 }
 
 function sentResponse(): Response {
