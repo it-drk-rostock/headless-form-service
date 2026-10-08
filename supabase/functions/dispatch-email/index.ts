@@ -1,6 +1,7 @@
 // Thin Deno entry point: wire real dependencies into the portable handler.
 // All logic lives in handler.ts, which is tested under Vitest with fakes.
 import { Receiver } from "npm:@upstash/qstash@2.12.0";
+import type { PassMetadata } from "../../../lib/shared/form-pass.ts";
 import { createMailjetSender } from "../_shared/mailjet.ts";
 import { createServiceClient, dispatchEmailUrl } from "../_shared/service.ts";
 import {
@@ -73,6 +74,16 @@ Deno.serve((request) =>
             replyToQuestion: data.reply_to_question,
             allowedRecipientDomains: data.allowed_recipient_domains,
           };
+    },
+    loadPassMetadata: async (formId, passId) => {
+      const { data, error } = await supabase
+        .from("form_passes")
+        .select("metadata")
+        .eq("form_id", formId)
+        .eq("id", passId)
+        .maybeSingle<{ metadata: PassMetadata }>();
+      if (error) throw error;
+      return data?.metadata ?? null;
     },
     send,
     markSent: async (submissionId) => {

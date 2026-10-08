@@ -122,6 +122,11 @@ export const de = {
   "forms.emailInsertQuestions": "Antworten",
   "forms.emailInsertNoQuestions": "Der Entwurf hat noch keine Fragen.",
   "forms.emailInsertGeneral": "Allgemein",
+  "forms.emailInsertPass": "Formularpass",
+  "forms.emailInsertNoPassKeys":
+    "Die Formularpässe dieses Formulars haben noch keine Metadaten.",
+  "forms.emailInsertPassHint":
+    "Weitere Schlüssel als {{pass.<schlüssel>}} eintippen. Hat der Formularpass einer Einsendung den Schlüssel nicht, bleibt die Stelle leer.",
   "forms.emailPlaceholderFormName": "Name des Formulars",
   "forms.emailPlaceholderSubmittedAt": "Zeitpunkt der Einsendung",
   "forms.emailPlaceholderAnswersTable": "Alle Antworten als Tabelle",
@@ -134,6 +139,8 @@ export const de = {
   "forms.emailPreview": "Vorschau",
   "forms.emailPreviewHint":
     "Mit Beispielantworten, so wie die E-Mail bei den Empfängern ankommt.",
+  "forms.emailPreviewPassHint":
+    "Mit Beispielantworten und Beispielwerten für Formularpass-Metadaten, so wie die E-Mail bei den Empfängern ankommt.",
   "forms.emailPreviewFrame": "Vorschau der Benachrichtigungs-E-Mail",
   "editor.bold": "Fett",
   "editor.italic": "Kursiv",

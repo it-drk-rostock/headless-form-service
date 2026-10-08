@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import type { PassMetadata } from "../../../lib/shared/form-pass.ts";
 import type { Mail } from "../_shared/mailjet.ts";
 import {
   decryptSubmission,
@@ -15,6 +16,7 @@ import {
 
 const FORM = "3f6c1a52-8d0e-4b7a-9c1d-2e5f8a9b0c1d";
 const SUBMISSION = "0b9c2f4e-6a1d-4e8b-9f3c-5d7e1a2b4c6d";
+const PASS = "7d2e4f6a-1b3c-4d5e-8f9a-0b1c2d3e4f5a";
 const SIGNATURE = "valid-signature";
 const SENDER_EMAIL = "formulare@drk-rostock.de";
 const SCHEMA = {
@@ -46,12 +48,13 @@ const ids = { submissionId: SUBMISSION, formId: FORM, version: 2 };
 /** A QStash message as `/submit-form` publishes it. */
 async function message(
   answers: Record<string, unknown> = { vorname: "<b>Erika</b>" },
+  passId: string | null = null,
 ): Promise<QueuedSubmission> {
   return {
     submission_id: SUBMISSION,
     form_id: FORM,
     version: 2,
-    encrypted: await encryptSubmission(keys, ids, { answers, pass_id: null }),
+    encrypted: await encryptSubmission(keys, ids, { answers, pass_id: passId }),
   };
 }
 
@@ -71,6 +74,10 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
   };
   const sent: Mail[] = [];
   const statuses = new Map<string, string>();
+  const passes = new Map<string, PassMetadata>([
+    [PASS, { ticket: "T-4711", kampagne: "Herbst <2026>" }],
+  ]);
+  const passLoads: string[] = [];
   const deps: DispatchEmailDeps = {
     verifySignature: async (signature) => signature === SIGNATURE,
     decrypt: (ids, envelope) => decryptSubmission(keys, ids, envelope),
@@ -80,6 +87,10 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
       requested.version === 2
         ? submission
         : null,
+    loadPassMetadata: async (formId, passId) => {
+      passLoads.push(passId);
+      return formId === FORM ? (passes.get(passId) ?? null) : null;
+    },
     send: async (mail) => {
       sent.push(mail);
     },
@@ -88,7 +99,7 @@ function fakes(overrides: Partial<DispatchedSubmission> = {}) {
     },
     senderEmail: SENDER_EMAIL,
   };
-  return { deps, sent, statuses };
+  return { deps, sent, statuses, passes, passLoads };
 }
 
 const deliver = (
@@ -183,6 +194,64 @@ describe("handleDispatchEmail", () => {
 
     expect(sent[0].subject).toBe("Anmeldung von <b>Erika</b>");
     expect(sent[0].html).toContain("<p>Hallo &lt;b&gt;Erika&lt;/b&gt;</p>");
+  });
+
+  it("fills pass placeholders from the metadata of the claimed form pass", async () => {
+    const { deps, sent, passLoads } = fakes({
+      template: {
+        mode: "standard",
+        subject: "Ticket {{pass.ticket}}",
+        body: "<p>{{pass.kampagne}} [{{pass.abteilung}}]</p>",
+      },
+    });
+
+    const response = await handleDispatchEmail(
+      deliver(await message(undefined, PASS)),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(passLoads).toEqual([PASS]);
+    expect(sent[0].subject).toBe("Ticket T-4711");
+    // Escaped, and a key the pass lacks is empty.
+    expect(sent[0].html).toContain("<p>Herbst &lt;2026&gt; []</p>");
+  });
+
+  it("renders pass placeholders empty when the claimed pass is gone", async () => {
+    const { deps, sent, passes } = fakes({
+      template: { mode: "standard", subject: "[{{pass.ticket}}]", body: "" },
+    });
+    passes.clear();
+
+    await handleDispatchEmail(deliver(await message(undefined, PASS)), deps);
+
+    expect(sent[0].subject).toBe("[]");
+  });
+
+  it("loads no pass for a submission without one", async () => {
+    const { deps, sent, passLoads } = fakes({
+      template: { mode: "standard", subject: "{{pass.ticket}}", body: "" },
+    });
+
+    await handleDispatchEmail(deliver(await message()), deps);
+
+    expect(passLoads).toEqual([]);
+    expect(sent[0].subject).toBe("{{pass.ticket}}");
+  });
+
+  it("answers 500 without sending when the pass metadata cannot be loaded", async () => {
+    const { deps, sent } = fakes();
+    deps.loadPassMetadata = async () => {
+      throw new Error("connection refused");
+    };
+
+    const response = await handleDispatchEmail(
+      deliver(await message(undefined, PASS)),
+      deps,
+    );
+
+    expect(response.status).toBe(500);
+    expect(sent).toEqual([]);
   });
 
   it("marks the submission sent", async () => {

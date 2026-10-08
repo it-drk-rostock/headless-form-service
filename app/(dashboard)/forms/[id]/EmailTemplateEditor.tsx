@@ -47,6 +47,7 @@ import {
   fitsSubject,
   isEmailTemplateMode,
   knownPlaceholders,
+  passKey,
   placeholderText,
   SUBMITTED_AT,
   standardLayoutHtml,
@@ -78,10 +79,17 @@ export function EmailTemplateEditor({
   formId,
   formName,
   initialTemplate,
+  passPlaceholders,
 }: {
   formId: string;
   formName: string;
   initialTemplate: EmailTemplate;
+  /**
+   * For a protected form, the `{{pass.<key>}}` placeholders its passes'
+   * metadata has, to offer (ticket 28); null for a public form, whose
+   * submissions come without a form pass.
+   */
+  passPlaceholders: string[] | null;
 }) {
   const { reset } = useDraftStatus();
   return (
@@ -90,6 +98,7 @@ export function EmailTemplateEditor({
       formId={formId}
       formName={formName}
       initialTemplate={reset.draft?.emailTemplate ?? initialTemplate}
+      passPlaceholders={passPlaceholders}
     />
   );
 }
@@ -98,10 +107,12 @@ function TemplateEditor({
   formId,
   formName,
   initialTemplate,
+  passPlaceholders,
 }: {
   formId: string;
   formName: string;
   initialTemplate: EmailTemplate;
+  passPlaceholders: string[] | null;
 }) {
   const { schema, setStamp, setUnsaved } = useDraftStatus();
   const [mode, setMode] = useState(initialTemplate.mode);
@@ -110,7 +121,8 @@ function TemplateEditor({
   const [result, setResult] = useState<DraftSaveResult | null>(null);
   const [confirmingStandard, setConfirmingStandard] = useState(false);
   const template: EmailTemplate = { mode, subject, body };
-  const unknown = unknownPlaceholders(template, schema);
+  const withPasses = passPlaceholders !== null;
+  const unknown = unknownPlaceholders(template, schema, withPasses);
 
   // Where *Platzhalter einfügen* inserts: the field last focused, and the
   // cursor in the subject or the HTML when it left it.
@@ -134,7 +146,7 @@ function TemplateEditor({
 
   // The placeholders the body highlights as known, read by the editor's
   // decorations on every redraw.
-  const known = useRef(knownPlaceholders(schema));
+  const known = useRef(knownPlaceholders(schema, withPasses));
 
   // Changes made, and the last of them a successful save covered.
   const changes = useRef({ made: 0, saved: 0 });
@@ -206,11 +218,13 @@ function TemplateEditor({
     },
   });
 
-  // The designer may add or rename questions while this view stays open.
+  // The designer may add or rename questions while this view stays open,
+  // and saving the settings, which refreshes the page, may make the form
+  // protected or public.
   useEffect(() => {
-    known.current = knownPlaceholders(schema);
+    known.current = knownPlaceholders(schema, withPasses);
     if (editor) refreshPlaceholderHighlight(editor.view);
-  }, [schema, editor]);
+  }, [schema, withPasses, editor]);
 
   // Leaving the page before the last change is saved would lose it.
   useEffect(() => {
@@ -404,7 +418,11 @@ function TemplateEditor({
               description={t("forms.emailHtmlHint")}
             >
               <Group justify="flex-end" mt={4} mb={6}>
-                <PlaceholderMenu schema={schema} onInsert={insert} />
+                <PlaceholderMenu
+                  schema={schema}
+                  passPlaceholders={passPlaceholders}
+                  onInsert={insert}
+                />
               </Group>
               <Textarea
                 ref={htmlInput}
@@ -478,7 +496,11 @@ function TemplateEditor({
                   <RichTextEditor.Undo />
                   <RichTextEditor.Redo />
                 </RichTextEditor.ControlsGroup>
-                <PlaceholderMenu schema={schema} onInsert={insert} />
+                <PlaceholderMenu
+                  schema={schema}
+                  passPlaceholders={passPlaceholders}
+                  onInsert={insert}
+                />
               </RichTextEditor.Toolbar>
               <RichTextEditor.Content className={classes.content} />
             </RichTextEditor>
@@ -506,7 +528,12 @@ function TemplateEditor({
           )}
         </Stack>
 
-        <EmailPreview template={template} formName={formName} schema={schema} />
+        <EmailPreview
+          template={template}
+          formName={formName}
+          schema={schema}
+          withPasses={withPasses}
+        />
       </SimpleGrid>
     </Box>
   );
@@ -514,13 +541,16 @@ function TemplateEditor({
 
 /**
  * *Platzhalter einfügen*: the answer of every question of the draft, then
- * the form's name, the time of submission and the answers table.
+ * the form's name, the time of submission and the answers table, and for a
+ * protected form the pass metadata its passes have.
  */
 function PlaceholderMenu({
   schema,
+  passPlaceholders,
   onInsert,
 }: {
   schema: unknown;
+  passPlaceholders: string[] | null;
   onInsert: (name: string) => void;
 }) {
   const questions = answerPlaceholders(schema);
@@ -561,6 +591,23 @@ function PlaceholderMenu({
         {item(FORM_NAME, t("forms.emailPlaceholderFormName"))}
         {item(SUBMITTED_AT, t("forms.emailPlaceholderSubmittedAt"))}
         {item(ANSWERS_TABLE, t("forms.emailPlaceholderAnswersTable"))}
+        {passPlaceholders !== null && (
+          <>
+            <Menu.Divider />
+            <Menu.Label>{t("forms.emailInsertPass")}</Menu.Label>
+            {passPlaceholders.length === 0 ? (
+              <Text fz={13} c="gray.6" px="sm" py={6}>
+                {t("forms.emailInsertNoPassKeys")}
+              </Text>
+            ) : (
+              passPlaceholders.map((name) => item(name, passKey(name) ?? name))
+            )}
+            <Text fz={11} c="gray.6" px="sm" py={6}>
+              {t("forms.emailInsertPassHint")}
+            </Text>
+          </>
+        )}
+        <Menu.Divider />
         <Text fz={11} c="gray.6" px="sm" py={6}>
           {t("forms.emailInsertHint")}
         </Text>

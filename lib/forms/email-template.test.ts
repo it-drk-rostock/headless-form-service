@@ -5,6 +5,7 @@ import {
   EMAIL_SUBJECT_MAX_LENGTH,
   emailTemplateProblem,
   sampleAnswers,
+  samplePassMetadata,
 } from "./email-template.ts";
 
 const template = (subject: string, body = "<p>Hallo</p>") => ({
@@ -87,5 +88,17 @@ describe("sampleAnswers", () => {
     });
     // The preview shows choice texts, as the email does.
     expect(answersTable(schema, answers)).toContain("Erste Hilfe");
+  });
+});
+
+describe("samplePassMetadata", () => {
+  it("gives every pass placeholder of the template a sample value", () => {
+    expect(
+      samplePassMetadata({
+        mode: "standard",
+        subject: "{{pass.ticket}} {{form.name}}",
+        body: "<p>{{ pass.kampagne }} {{pass.ticket}} {{pass.mit leerzeichen}}</p>",
+      }),
+    ).toEqual({ ticket: "Beispielwert", kampagne: "Beispielwert" });
   });
 });

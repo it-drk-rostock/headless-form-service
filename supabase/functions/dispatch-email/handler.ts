@@ -2,6 +2,7 @@
 // submission here. Only QStash may call it, which its signature proves. The
 // answers are decrypted only to render the notification email, which goes to
 // the form's recipients through Mailjet; nothing of them is stored or logged.
+import type { PassMetadata } from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import {
   parseEmailTemplate,
@@ -46,6 +47,14 @@ export type DispatchEmailDeps = {
   ) => Promise<SubmissionPayload>;
   /** Null when the form version does not exist (any more). */
   loadSubmission: (ids: SubmissionIds) => Promise<DispatchedSubmission | null>;
+  /**
+   * The metadata of the form's pass `passId` (ticket 28); null when the pass
+   * is gone.
+   */
+  loadPassMetadata: (
+    formId: string,
+    passId: string,
+  ) => Promise<PassMetadata | null>;
   /** Throws when Mailjet did not accept the email. */
   send: (mail: Mail) => Promise<void>;
   markSent: (submissionId: string) => Promise<void>;
@@ -135,11 +144,18 @@ async function dispatch(
     return reply({ error: "template_invalid" }, 422);
   }
 
+  // The pass as it is now; a pass that is gone has no metadata to fill in.
+  // Messages queued before ticket 27 have no `pass_id` at all.
+  const passMetadata =
+    typeof payload.pass_id !== "string"
+      ? undefined
+      : ((await deps.loadPassMetadata(ids.formId, payload.pass_id)) ?? {});
   const { subject, html } = renderNotificationEmail(template, {
     formName: submission.formName,
     submittedAt: submission.submittedAt,
     schema: submission.schema,
     answers: payload.answers,
+    passMetadata,
   });
   // Like recipients and the display name, the Reply-To question is the
   // form's as it is now (ADR-0003); the answer is the submission's.

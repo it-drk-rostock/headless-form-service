@@ -12,6 +12,7 @@ import {
 } from "@/lib/forms/queries.ts";
 import { formView } from "@/lib/forms/types.ts";
 import { formatDate, formatDateTime, t } from "@/lib/i18n/index.ts";
+import { passPlaceholders } from "@/lib/shared/notification.ts";
 import { AnchorLink } from "../../../_components/AnchorLink.tsx";
 import { FormStatusBadge } from "../FormStatusBadge.tsx";
 import {
@@ -116,6 +117,11 @@ export default async function FormPage({
               formId={form.id}
               formName={form.name}
               initialTemplate={draft.emailTemplate}
+              passPlaceholders={
+                form.accessType === "protected"
+                  ? passPlaceholders(passes.map((pass) => pass.metadata))
+                  : null
+              }
             />
           ),
           versions: (

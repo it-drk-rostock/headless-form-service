@@ -1,6 +1,12 @@
 import type { MessageKey } from "../i18n/index.ts";
 import { type Answers, questionsOf } from "../shared/answers.ts";
-import { parseEmailTemplate } from "../shared/notification.ts";
+import type { PassMetadata } from "../shared/form-pass.ts";
+import {
+  type EmailTemplate,
+  findPlaceholders,
+  parseEmailTemplate,
+  passKey,
+} from "../shared/notification.ts";
 import { isObject } from "../shared/object.ts";
 
 /**
@@ -41,6 +47,17 @@ export function sampleAnswers(schema: unknown): Answers {
   return Object.fromEntries(
     questionsOf(schema).map(({ key, element }) => [key, sampleOf(element)]),
   );
+}
+
+/**
+ * A made-up value for every `{{pass.<key>}}` of `template`, for the email
+ * editor's preview of a protected form.
+ */
+export function samplePassMetadata(template: EmailTemplate): PassMetadata {
+  const keys = findPlaceholders(`${template.subject} ${template.body}`)
+    .map(({ name }) => passKey(name))
+    .filter((key) => key !== null);
+  return Object.fromEntries(keys.map((key) => [key, "Beispielwert"]));
 }
 
 function sampleOf(question: Record<string, unknown>): unknown {

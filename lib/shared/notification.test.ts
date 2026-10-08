@@ -8,6 +8,7 @@ import {
   formatSubmittedAt,
   normalizeSenderName,
   parseEmailTemplate,
+  passPlaceholders,
   renderNotificationEmail,
   replyToAddress,
   senderName,
@@ -399,6 +400,72 @@ describe("renderNotificationEmail: {{answers.*}}", () => {
   });
 });
 
+describe("renderNotificationEmail: {{pass.*}}", () => {
+  const context = {
+    formName: "Kursanmeldung",
+    submittedAt: SUBMITTED_AT,
+    schema: page({ type: "text", name: "vorname" }),
+    answers: { vorname: "Erika" },
+  };
+  const template = (text: string) =>
+    ({ mode: "standard", subject: text, body: `<p>${text}</p>` }) as const;
+
+  it("fills pass metadata in subject and body, escaping it in the body", () => {
+    const { subject, html } = renderNotificationEmail(
+      template("Ticket {{pass.ticket}} / {{ pass.kampagne }}"),
+      {
+        ...context,
+        passMetadata: { ticket: "T-1 <neu>", kampagne: "Herbst & Winter" },
+      },
+    );
+
+    expect(subject).toBe("Ticket T-1 <neu> / Herbst & Winter");
+    expect(html).toContain(
+      "<p>Ticket T-1 &lt;neu&gt; / Herbst &amp; Winter</p>",
+    );
+  });
+
+  it("shows numbers as they were given, without German digit grouping", () => {
+    const { subject } = renderNotificationEmail(
+      template("{{pass.ticket}} {{pass.anteil}}"),
+      { ...context, passMetadata: { ticket: 1234567, anteil: 0.5 } },
+    );
+
+    expect(subject).toBe("1234567 0.5");
+  });
+
+  it("renders keys the pass does not have as empty", () => {
+    const { subject, html } = renderNotificationEmail(
+      template("[{{pass.ticket}}] [{{pass.constructor}}] [{{pass.toString}}]"),
+      { ...context, passMetadata: {} },
+    );
+
+    expect(subject).toBe("[] [] []");
+    expect(html).toContain("<p>[] [] []</p>");
+  });
+
+  it("does not let pass metadata introduce another placeholder", () => {
+    const { html } = renderNotificationEmail(template("{{pass.ticket}}"), {
+      ...context,
+      passMetadata: { ticket: "{{answers.vorname}}" },
+    });
+
+    expect(html).toContain("<p>{{answers.vorname}}</p>");
+  });
+
+  it("leaves pass placeholders as written without a form pass, and names no key cannot hold", () => {
+    expect(
+      renderNotificationEmail(template("{{pass.ticket}}"), context).subject,
+    ).toBe("{{pass.ticket}}");
+    expect(
+      renderNotificationEmail(template("{{pass.}} {{pass.mit leerzeichen}}"), {
+        ...context,
+        passMetadata: { ticket: "T-1" },
+      }).subject,
+    ).toBe("{{pass.}} {{pass.mit leerzeichen}}");
+  });
+});
+
 describe("standard layout", () => {
   it("wraps the body in the branded DRK Rostock layout", () => {
     const { html } = renderNotificationEmail(
@@ -570,6 +637,35 @@ describe("unknownPlaceholders", () => {
       subject: ["answers_table", "form.id"],
       body: ["answers.nachname", "pass.ticket", ""],
     });
+  });
+
+  it("knows pass placeholders of any valid key for forms with form passes", () => {
+    expect(
+      unknownPlaceholders(
+        {
+          mode: "standard",
+          subject: "{{pass.ticket}} {{pass.}}",
+          body: "<p>{{pass.kampagne_id}} {{pass.mit leerzeichen}}</p>",
+        },
+        schema,
+        true,
+      ),
+    ).toEqual({
+      subject: ["pass."],
+      body: ["pass.mit leerzeichen"],
+    });
+  });
+});
+
+describe("passPlaceholders", () => {
+  it("offers each key once, sorted, as a pass placeholder", () => {
+    expect(
+      passPlaceholders([
+        { ticket: "T-1", kampagne: "Herbst" },
+        {},
+        { ticket: 2, Abteilung: "Kurse" },
+      ]),
+    ).toEqual(["pass.Abteilung", "pass.kampagne", "pass.ticket"]);
   });
 });
 

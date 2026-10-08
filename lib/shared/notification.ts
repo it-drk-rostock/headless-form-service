@@ -13,6 +13,7 @@ import {
   questionsOf,
 } from "./answers.ts";
 import { isEmailAddress, normalizeEmail } from "./email.ts";
+import { isPassMetadataKey, type PassMetadata } from "./form-pass.ts";
 import { isObject } from "./object.ts";
 
 /** A form version's `email_template` (blueprint §5.2). */
@@ -46,6 +47,11 @@ export type NotificationContext = {
   /** The submitted version's SurveyJS JSON: question order and titles. */
   schema: unknown;
   answers: Answers;
+  /**
+   * The metadata of the form pass the submission claimed (ticket 28). Absent
+   * when it came without one, from a public form.
+   */
+  passMetadata?: PassMetadata;
 };
 
 export type RenderedEmail = {
@@ -76,10 +82,21 @@ export const FORM_NAME = "form.name";
 export const SUBMITTED_AT = "submitted_at";
 export const ANSWERS_TABLE = "answers_table";
 const ANSWERS = "answers.";
+const PASS = "pass.";
 
 /** A placeholder as written in a template. */
 export function placeholderText(name: string): string {
   return `{{${name}}}`;
+}
+
+/**
+ * The metadata key a `{{pass.<key>}}` placeholder names, or null when `name`
+ * is no pass placeholder or names no key a pass can have.
+ */
+export function passKey(name: string): string | null {
+  if (!name.startsWith(PASS)) return null;
+  const key = name.slice(PASS.length);
+  return isPassMetadataKey(key) ? key : null;
 }
 
 /** Whether a placeholder can be filled in the subject, which is plain text. */
@@ -97,9 +114,11 @@ const PLACEHOLDER = /\{\{\s*([^{}]*?)\s*\}\}/g;
 const ANSWERS_TABLE_PARAGRAPH = /<p>\s*\{\{\s*answers_table\s*\}\}\s*<\/p>/g;
 
 /**
- * Fills `{{answers.<question>}}`, `{{form.name}}`, `{{submitted_at}}` and
- * `{{answers_table}}`. Other placeholders (e.g. `{{pass.*}}` until ticket 28,
- * or a question a later version renamed) stay as they are. The subject is
+ * Fills `{{answers.<question>}}`, `{{form.name}}`, `{{submitted_at}}`,
+ * `{{answers_table}}` and, for a submission with a form pass,
+ * `{{pass.<key>}}`; a key the pass has no metadata for is empty. Other
+ * placeholders (e.g. a question a later version renamed, or `{{pass.*}}`
+ * without a form pass) stay as they are. The subject is
  * plain text, so its values are not escaped and it has no answers table.
  * A Standard Layout body is wrapped in the layout; a Custom HTML Template is
  * the whole email as its author wrote it.
@@ -117,6 +136,10 @@ export function renderNotificationEmail(
   const value = (name: string): string | undefined => {
     if (name === FORM_NAME) return formName;
     if (name === SUBMITTED_AT) return submittedAt;
+    const key = passKey(name);
+    if (key !== null) {
+      return context.passMetadata && passText(context.passMetadata, key);
+    }
     if (!name.startsWith(ANSWERS)) return undefined;
     const question = questions.get(name.slice(ANSWERS.length));
     return question && answerText(question, context.answers);
@@ -143,6 +166,18 @@ export function renderNotificationEmail(
     },
   );
   return { subject, html };
+}
+
+/**
+ * A pass metadata value as text; empty when the pass has none. Numbers are
+ * IDs rather than amounts, so they are shown as given, not in German.
+ */
+function passText(metadata: PassMetadata, key: string): string {
+  if (!Object.hasOwn(metadata, key)) return "";
+  // Read from the database as JSON, so checked rather than trusted.
+  const value: unknown = metadata[key];
+  if (typeof value === "string") return value;
+  return typeof value === "number" ? String(value) : "";
 }
 
 /**
@@ -186,6 +221,18 @@ export function answerPlaceholders(schema: unknown): AnswerPlaceholder[] {
   return tableQuestions(schema)
     .filter(({ key }) => !/[{}]/.test(key) && key.trim() === key)
     .map(({ key, title }) => ({ name: ANSWERS + key, title }));
+}
+
+/**
+ * `{{pass.<key>}}` for every key of the given passes' metadata, each once and
+ * sorted: what the email editor offers for a protected form.
+ */
+export function passPlaceholders(metadata: PassMetadata[]): string[] {
+  const keys = new Set(metadata.flatMap((entries) => Object.keys(entries)));
+  return [...keys]
+    .filter(isPassMetadataKey)
+    .sort((a, b) => a.localeCompare(b, "de"))
+    .map((key) => PASS + key);
 }
 
 /** A question that asks for an email address, by its answer key. */
@@ -244,17 +291,24 @@ export function senderName(displayName: string): string {
 }
 
 /**
- * The placeholders the renderer fills in a body: the system ones and the
- * answer of every question of `schema`. A subject knows those that
- * `fitsSubject`.
+ * The placeholders the renderer fills in a body: the system ones, the answer
+ * of every question of `schema` and, `withPasses` (the form is protected, so
+ * submissions come with a form pass), `{{pass.<key>}}` for any key a pass
+ * can have. A subject knows those that `fitsSubject`.
  */
-export function knownPlaceholders(schema: unknown): Set<string> {
-  return new Set([
+export function knownPlaceholders(
+  schema: unknown,
+  withPasses = false,
+): { has: (name: string) => boolean } {
+  const names = new Set([
     FORM_NAME,
     SUBMITTED_AT,
     ANSWERS_TABLE,
     ...questionsOf(schema).map(({ key }) => ANSWERS + key),
   ]);
+  return {
+    has: (name) => names.has(name) || (withPasses && passKey(name) !== null),
+  };
 }
 
 /**
@@ -265,8 +319,9 @@ export function knownPlaceholders(schema: unknown): Set<string> {
 export function unknownPlaceholders(
   template: EmailTemplate,
   schema: unknown,
+  withPasses = false,
 ): { subject: string[]; body: string[] } {
-  const known = knownPlaceholders(schema);
+  const known = knownPlaceholders(schema, withPasses);
   const unknownIn = (names: string[], isKnown: (name: string) => boolean) => [
     ...new Set(names.filter((name) => !isKnown(name))),
   ];

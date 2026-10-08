@@ -13,6 +13,11 @@ export const PASS_METADATA_KEY_MAX_LENGTH = 50;
 /** Keys a `{{pass.<key>}}` placeholder can name. */
 const PASS_METADATA_KEY = /^[A-Za-z0-9_-]{1,50}$/;
 
+/** Whether `key` can be a pass metadata key, and so be named by `{{pass.<key>}}`. */
+export function isPassMetadataKey(key: string): boolean {
+  return PASS_METADATA_KEY.test(key);
+}
+
 /** Pass metadata (GLOSSARY): flat string or number values, never personal data. */
 export type PassMetadata = Record<string, string | number>;
 
@@ -61,7 +66,7 @@ export function passMetadataProblem(
   const entries = Object.entries(value);
   if (entries.length > PASS_METADATA_MAX_ENTRIES) return "too_many";
   for (const [key, entry] of entries) {
-    if (!PASS_METADATA_KEY.test(key)) return "key_invalid";
+    if (!isPassMetadataKey(key)) return "key_invalid";
     if (typeof entry === "number") {
       if (!Number.isFinite(entry)) return "value_invalid";
     } else if (typeof entry === "string") {
