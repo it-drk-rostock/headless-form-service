@@ -414,6 +414,11 @@ verify_jwt = false
 # QStash's signature itself and refuses everything else.
 verify_jwt = false
 
+[functions.generate-form-pass]
+# Called only by n8n, with N8N_INTEGRATION_KEY as Bearer instead of a
+# Supabase JWT (ADR-0005). The function checks the key itself.
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

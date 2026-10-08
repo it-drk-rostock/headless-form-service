@@ -1,5 +1,8 @@
 import type { MessageKey } from "../i18n/index.ts";
 import {
+  isCountUpTo,
+  PASS_EXPIRY_MAX_HOURS,
+  PASS_MAX_USES_LIMIT,
   type PassMetadata,
   type PassMetadataProblem,
   passMetadataProblem,
@@ -9,13 +12,6 @@ import { type ProfileNameRow, profileName } from "../shared/profile.ts";
 
 /** Same limit as the `forms_page_url_check` constraint in the database. */
 export const FORM_PAGE_MAX_LENGTH = 2000;
-/** The highest use limit the dashboard offers; none means unlimited. */
-export const PASS_MAX_USES_LIMIT = 10_000;
-/** The longest expiry the dashboard offers, one year; none means no expiry. */
-export const PASS_EXPIRY_MAX_HOURS = 8760;
-/** What the dashboard suggests, like `/generate-form-pass` (blueprint §7). */
-export const PASS_DEFAULT_MAX_USES = 1;
-export const PASS_DEFAULT_EXPIRY_HOURS = 48;
 
 /**
  * The form page as typed: none when blank, otherwise an http or https
@@ -102,14 +98,6 @@ export function parseFormPassInput(input: unknown): ParsedFormPassInput {
   const problem = passMetadataProblem(metadata);
   if (problem) return { error: metadataErrors[problem] };
   return { maxUses, expiresInHours, metadata };
-}
-
-function isCountUpTo(value: unknown, max: number): value is number {
-  return (
-    Number.isInteger(value) &&
-    (value as number) >= 1 &&
-    (value as number) <= max
-  );
 }
 
 /** How a pass shows in the list (blueprint §3: valid, used up, expired, revoked). */

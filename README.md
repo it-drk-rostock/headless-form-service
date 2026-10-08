@@ -198,6 +198,23 @@ A protected form is filled in only with a form pass: a secret in the link `<form
 - `/load-form` checks the pass without consuming it. `/submit-form` atomically reserves one valid use per submission through `public.claim_form_pass(form, token_hash, submission)`. Missing, wrong-form, revoked, expired or exhausted passes get 403 `form_pass_invalid`. Retries with the same submission ID share the reservation. `public.finish_form_pass_claim(submission, accepted)` keeps the use if any attempt published, or returns it once every attempt failed. Both functions are callable only with the secret key. The private reservation table holds only IDs and attempt state, and goes with its pass when the form is deleted.
 - Checks 43–44 of `supabase/snippets/rls-checklist-teams.sql` cover it, plus 9.
 
+### Form passes from n8n
+
+n8n creates form passes with `POST /functions/v1/generate-form-pass` (`supabase/functions/generate-form-pass/`, blueprint §7). It authenticates with one global key, `Authorization: Bearer <N8N_INTEGRATION_KEY>`, never with the secret key (ADR-0005). The function has `verify_jwt = false` and checks the key itself; a missing or wrong key gets 401 `unauthorized`.
+
+- The body is JSON `{ form_id, max_uses?, expires_in_hours?, metadata? }`. `max_uses` defaults to 1, `null` means unlimited, at most 10000. `expires_in_hours` defaults to 48, at most 8760 (a year); every n8n pass expires. `metadata` follows the same rules as in the dashboard. Anything else, including unknown fields, gets 400 `{ error: "request_invalid", field }`.
+- The form must be protected: a public form gets 409 `form_not_protected`, an unknown or archived form 404 `form_not_found`.
+- The answer is 201 `{ form_pass, expires_at, url? }`, with `Cache-Control: no-store`. `form_pass` is the secret, returned only here; `url` is `<form page>?form_pass=<secret>` and is left out while the form has no form page.
+- The function makes the secret like the dashboard and stores only its hash through `public.create_n8n_form_pass(form, token_hash, max_uses, expires_at, metadata)`, which only the secret key can call. The pass has source `n8n` and no creator; the audit log shows it as made by the system. It is listed and revoked in the dashboard like any other.
+
+Set the key once, and give the same value to n8n as a header credential:
+
+```bash
+npx supabase secrets set N8N_INTEGRATION_KEY=<output of: openssl rand -base64 32>
+```
+
+To rotate it, set a new value and update n8n's credential; requests with the old key fail from then on.
+
 ### Loading forms
 
 The embed loads a form with `GET /functions/v1/load-form?form_id=<uuid>` (`supabase/functions/load-form/`). It answers `{ version, schema, access_type }` for the form's current version, plus `turnstile_site_key` when the form has Turnstile on. The anon role has no table access; the function reads with the secret key the runtime injects (ADR-0004).

@@ -10,6 +10,24 @@ export const FORM_PASS_PARAM = "form_pass";
 export const PASS_METADATA_MAX_ENTRIES = 20;
 export const PASS_METADATA_VALUE_MAX_LENGTH = 500;
 export const PASS_METADATA_KEY_MAX_LENGTH = 50;
+/**
+ * The highest use limit and longest expiry (one year) a new pass can get,
+ * in the dashboard and through `/generate-form-pass`.
+ */
+export const PASS_MAX_USES_LIMIT = 10_000;
+export const PASS_EXPIRY_MAX_HOURS = 8760;
+/** Whether `value` is a whole number from 1 to `max`, as use limits and expiries are. */
+export function isCountUpTo(value: unknown, max: number): value is number {
+  return (
+    Number.isInteger(value) &&
+    (value as number) >= 1 &&
+    (value as number) <= max
+  );
+}
+
+/** `/generate-form-pass`'s defaults (blueprint §7), which the dashboard suggests. */
+export const PASS_DEFAULT_MAX_USES = 1;
+export const PASS_DEFAULT_EXPIRY_HOURS = 48;
 /** Keys a `{{pass.<key>}}` placeholder can name. */
 const PASS_METADATA_KEY = /^[A-Za-z0-9_-]{1,50}$/;
 
