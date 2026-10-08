@@ -4,6 +4,12 @@ import { requireProfile } from "../auth/profile.ts";
 import { parseEmailTemplate } from "../shared/notification.ts";
 import { createClient } from "../supabase/server.ts";
 import {
+  DELIVERY_FAILURE_COLUMNS,
+  type DeliveryFailure,
+  type DeliveryFailureRow,
+  toDeliveryFailure,
+} from "./delivery-failures.ts";
+import {
   DRAFT_STAMP_COLUMNS,
   type DraftSchema,
   type DraftStampRow,
@@ -226,4 +232,30 @@ export async function listFormPasses(id: string): Promise<FormPass[]> {
   }
   const now = new Date();
   return data.map((row) => toFormPass(row, now));
+}
+
+/**
+ * A form's delivery failures, newest first: the submissions that failed, and
+ * those queued again by a retry until they are sent. Metadata only; RLS
+ * shows them to the people who see the form.
+ */
+export async function listDeliveryFailures(
+  id: string,
+): Promise<DeliveryFailure[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("form_stats")
+    .select(DELIVERY_FAILURE_COLUMNS)
+    .eq("form_id", id)
+    .neq("status", "sent")
+    .or("status.eq.failed,retried_at.not.is.null")
+    .order("submitted_at", { ascending: false })
+    .overrideTypes<DeliveryFailureRow[], { merge: false }>();
+  if (error) {
+    throw new Error(
+      `Delivery failures of form ${id} could not be loaded: ${error.message}`,
+    );
+  }
+  const now = new Date();
+  return data.map((row) => toDeliveryFailure(row, now));
 }

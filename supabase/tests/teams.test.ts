@@ -377,6 +377,30 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 44 failed/);
   });
 
+  it("catches delivery failures open to other teams", async () => {
+    await db.exec(`create or replace function public.delivery_retry_message(submission uuid)
+      returns text language sql security definer set search_path = '' as $$
+        select qstash_message_id from public.form_stats where id = submission $$`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 45 failed/);
+  });
+
+  it("catches QStash message IDs members can read", async () => {
+    await db.exec(
+      "grant select (qstash_message_id) on public.form_stats to authenticated",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 45 failed/);
+  });
+
+  it("catches retries that are not recorded", async () => {
+    await db.exec(`create or replace function public.record_delivery_retry(submission uuid, message text)
+      returns void language plpgsql security definer set search_path = '' as $$
+      begin
+        perform private.delivery_retry_team(submission);
+        update public.form_stats set status = 'queued' where id = submission;
+      end $$`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 46 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);

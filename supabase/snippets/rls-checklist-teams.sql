@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing, archiving and deleting forms, and form passes (tickets 04-10, 20-25). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing, archiving and deleting forms, form passes, and delivery failures and their retry (tickets 04-10, 20-25, 31). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 44 of 44 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 46 of 46 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -11,6 +11,7 @@
 --   Member A     …c003  member of team A
 --   Member B     …c004  member of team B
 --   Form A       …f1    of team A;  Form B  …f2  of team B
+--   Submission   …d1    of form A, failed (added after Member A's checks)
 -- `npm test` runs this file against the migrations (supabase/tests/).
 
 begin;
@@ -298,6 +299,14 @@ begin
   end;
 end $$;
 
+-- A failed delivery of form A's version 1 (check 28), for checks 45 and 46.
+reset role;
+insert into public.form_stats
+  (id, form_id, version, status, failure_reason, failed_at, qstash_message_id)
+values ('00000000-0000-4000-8000-0000000000d1',
+        '00000000-0000-4000-8000-0000000000f1', 1, 'failed', 'HTTP 500', now(),
+        'rls-check-message');
+
 -- As Member B ---------------------------------------------------------------
 reset role;
 set local role authenticated;
@@ -330,6 +339,23 @@ begin
   begin
     perform public.revoke_form_pass(current_setting('rls_check.form_pass')::uuid);
     raise exception 'RLS check 43 failed: Member B revoked a form pass of team A';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- 45. A member sees no delivery failures of other teams, and cannot retry
+  -- them.
+  if exists (select 1 from public.form_stats
+             where form_id = '00000000-0000-4000-8000-0000000000f1') then
+    raise exception 'RLS check 45 failed: Member B sees team A''s delivery failures';
+  end if;
+  begin
+    perform public.delivery_retry_message('00000000-0000-4000-8000-0000000000d1');
+    raise exception 'RLS check 45 failed: Member B got the message of team A''s failed delivery';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.record_delivery_retry('00000000-0000-4000-8000-0000000000d1', 'rls-check-forged');
+    raise exception 'RLS check 45 failed: Member B recorded a retry of team A''s delivery';
   exception when insufficient_privilege then null;
   end;
 end $$;
@@ -476,6 +502,36 @@ begin
       where action in ('form_pass.created', 'form_pass.revoked')
         and actor_id = '00000000-0000-4000-8000-00000000c003') <> 2 then
     raise exception 'RLS check 44 failed: the form pass creation and revocation of check 43 are not in the audit log';
+  end if;
+
+  -- 45. A member of the form's team sees its delivery failures, but not
+  -- QStash's message ID, and retries one: it is queued again.
+  if not exists (select 1 from public.form_stats
+                 where id = '00000000-0000-4000-8000-0000000000d1'
+                   and status = 'failed' and failure_reason = 'HTTP 500') then
+    raise exception 'RLS check 45 failed: the Team Admin does not see team A''s delivery failure';
+  end if;
+  begin
+    perform qstash_message_id from public.form_stats;
+    raise exception 'RLS check 45 failed: the Team Admin can read QStash message IDs';
+  exception when insufficient_privilege then null;
+  end;
+  if public.delivery_retry_message('00000000-0000-4000-8000-0000000000d1')
+     is distinct from 'rls-check-message' then
+    raise exception 'RLS check 45 failed: the Team Admin cannot retry team A''s delivery';
+  end if;
+  perform public.record_delivery_retry('00000000-0000-4000-8000-0000000000d1', 'rls-check-retried');
+  if (select status from public.form_stats
+      where id = '00000000-0000-4000-8000-0000000000d1') <> 'queued' then
+    raise exception 'RLS check 45 failed: the retried delivery is not queued again';
+  end if;
+
+  -- 46. The retry of check 45 is in the audit log.
+  if not exists (select 1 from public.audit_log
+                 where action = 'delivery.retried'
+                   and entity_id = '00000000-0000-4000-8000-0000000000d1'
+                   and actor_id = '00000000-0000-4000-8000-00000000c002') then
+    raise exception 'RLS check 46 failed: the retry of check 45 is not in the audit log';
   end if;
 
   -- 42. Only Super Admins delete forms for good, not even a Team Admin.
@@ -727,11 +783,14 @@ begin
   if has_function_privilege('anon', 'public.record_delivery_failure(uuid, uuid, text)', 'execute') then
     raise exception 'RLS check 32 failed: anon can call record_delivery_failure';
   end if;
+  if has_function_privilege('anon', 'public.delivery_retry_message(uuid)', 'execute') then
+    raise exception 'RLS check 32 failed: anon can call delivery_retry_message';
+  end if;
 end $$;
 
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 44 of 44 checks' as result;
+select 'RLS checklist passed: 46 of 46 checks' as result;
 
 rollback;

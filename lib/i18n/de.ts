@@ -90,6 +90,7 @@ export const de = {
   "forms.viewVersions": "Versionen",
   "forms.viewSettings": "Einstellungen",
   "forms.viewPasses": "Pässe",
+  "forms.viewFailures": "Fehler",
   "forms.designerHint":
     "Änderungen werden automatisch im Entwurf gespeichert. Besucher sehen sie erst nach dem Veröffentlichen.",
   "forms.draftNeverSaved": "Entwurf noch nicht gespeichert",
@@ -302,6 +303,31 @@ export const de = {
   "forms.passRevokeTitle": "Pass widerrufen",
   "forms.passRevokeText":
     "Der Pass wird sofort und endgültig ungültig. Wer den Link hat, kann das Formular damit nicht mehr ausfüllen. Bereits angenommene Einsendungen werden weiter zugestellt.",
+  "forms.failuresTitle": "Zustellfehler",
+  "forms.failuresHint":
+    "Einsendungen, deren Benachrichtigungs-E-Mail auch nach allen Wiederholungen nicht versendet werden konnte. Die Antworten werden nicht gespeichert und hier nie angezeigt. QStash bewahrt sie verschlüsselt {days} Tage lang auf; so lange lässt sich die Zustellung wiederholen.",
+  "forms.failuresEmptyTitle": "Keine Zustellfehler",
+  "forms.failuresEmptyHint":
+    "Alle angenommenen Einsendungen dieses Formulars wurden zugestellt oder sind unterwegs.",
+  "forms.columnFailureSubmitted": "Eingegangen",
+  "forms.columnFailureVersion": "Version",
+  "forms.columnFailureReason": "Grund",
+  "forms.columnFailureStatus": "Status",
+  "forms.failureVersion": "Version {version}",
+  "forms.failureNoReason": "–",
+  "forms.failureStatus.failed": "Fehlgeschlagen",
+  "forms.failureStatus.in_progress": "Wird erneut zugestellt",
+  "forms.failureRetry": "Zustellung wiederholen",
+  "forms.failureRetryExpired":
+    "Nicht mehr möglich: QStash bewahrt fehlgeschlagene Zustellungen nur {days} Tage auf. Diese Einsendung lässt sich nicht mehr zustellen.",
+  "forms.failureRetryGone":
+    "Nicht mehr möglich: Die Nachricht ist nicht mehr bei QStash (abgelaufen oder entfernt). Diese Einsendung lässt sich nicht mehr zustellen.",
+  "forms.errorRetryNotPossible":
+    "Diese Zustellung lässt sich nicht wiederholen. Bitte die Seite neu laden.",
+  "forms.errorRetryUnrecorded":
+    "Die Zustellung wurde erneut gestartet, konnte aber nicht vermerkt werden. Bitte nicht noch einmal wiederholen; die Einsendung verschwindet aus der Liste, sobald die E-Mail versendet ist.",
+  "forms.errorRetryFailed":
+    "Die Zustellung konnte gerade nicht wiederholt werden. Bitte später erneut versuchen.",
   "forms.lifecycleTitle": "Archivieren und löschen",
   "forms.archive": "Archivieren",
   "forms.archiveHint":
@@ -570,6 +596,9 @@ export const de = {
   "audit.summary.formPassExpires": "gültig bis {at}",
   "audit.summary.formPassNoExpiry": "ohne Ablauf",
   "audit.action.formPassRevoked": "Pass widerrufen",
+  "audit.action.deliveryRetried": "Zustellung wiederholt",
+  "audit.action.deliveryRetryUnavailable": "Zustellung nicht mehr wiederholbar",
+  "audit.summary.delivery": "{name}: Version {version}, eingegangen am {at}",
   "audit.action.formPublished": "Formular veröffentlicht",
   "audit.summary.formPublished": "{name}: Version {version}",
   "audit.action.formVersionRestored": "Version wiederhergestellt",

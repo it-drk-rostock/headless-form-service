@@ -18,6 +18,8 @@ import {
 import { isUuid } from "../shared/uuid.ts";
 import { createClient } from "../supabase/server.ts";
 import { isTeamId } from "../teams/id.ts";
+import { createDeadLetterQueue } from "./dead-letter-queue.ts";
+import { type RetryOutcome, retryDelivery } from "./delivery-failures.ts";
 import {
   DRAFT_STAMP_COLUMNS,
   type DraftStamp,
@@ -58,6 +60,7 @@ const VERSION_NOT_FOUND = "HF007"; // raised by public.restore_form_version()
 const NOT_YET_PUBLISHED = "HF008"; // raised by public.discard_draft_changes()
 const FORM_NOT_FOUND = "HF009"; // raised by public.delete_form()
 const FORM_NOT_PROTECTED = "HF010"; // raised by public.create_form_pass()
+const NOT_RETRYABLE = "HF011"; // raised by public.delivery_retry_message()
 // Raised by private.check_recipient_domains(), with the address as detail.
 const RECIPIENT_DOMAIN_NOT_ALLOWED = "HF006";
 
@@ -493,6 +496,79 @@ export async function revokeFormPass(
   refresh();
   return { error: null };
 }
+
+export type DeliveryRetryResult = { error: MessageKey | null };
+
+/**
+ * *Zustellung wiederholen*: retries a failed delivery from QStash's DLQ
+ * (blueprint §4.5), with the dashboard's QStash token. Members of the form's
+ * team and Super Admins may; the database checks it, queues the submission
+ * again and records the retry in the audit log. A message no longer in the
+ * DLQ is marked so, and the list then explains why it cannot be retried.
+ */
+export async function retryFormDelivery(
+  submissionId: string,
+): Promise<DeliveryRetryResult> {
+  if (!isUuid(submissionId)) return { error: "forms.errorForbidden" };
+
+  await requireProfile();
+  const supabase = await createClient();
+  const token = process.env.QSTASH_TOKEN;
+  if (!token) {
+    console.error("QSTASH_TOKEN is not set; see .env.example.");
+    return { error: "forms.errorRetryFailed" };
+  }
+  const dlq = createDeadLetterQueue({
+    token,
+    // Must stay an EU region (ADR-0002); QStash's default is.
+    baseUrl: process.env.QSTASH_URL || undefined,
+  });
+
+  let outcome: RetryOutcome;
+  try {
+    outcome = await retryDelivery(submissionId, {
+      failedMessageId: async (id) => {
+        const { data, error } = await supabase.rpc("delivery_retry_message", {
+          submission: id,
+        });
+        if (error?.code === NOT_RETRYABLE) return null;
+        if (error) throw error;
+        return data as string;
+      },
+      retryMessage: (message) => dlq.retry(message),
+      recordRetry: async (id, message) => {
+        const { error } = await supabase.rpc("record_delivery_retry", {
+          submission: id,
+          message,
+        });
+        if (error) throw error;
+      },
+      recordGone: async (id, message) => {
+        const { error } = await supabase.rpc("record_delivery_retry_gone", {
+          submission: id,
+          message,
+        });
+        if (error) throw error;
+      },
+    });
+  } catch (error) {
+    // QStash unreachable or refusing, or the database failing; also an
+    // attempt by someone outside the form's team, which the dashboard never
+    // offers.
+    console.error(`Delivery of ${submissionId} could not be retried`, error);
+    return { error: "forms.errorRetryFailed" };
+  }
+
+  refresh();
+  return { error: retryErrors[outcome] };
+}
+
+const retryErrors: Record<RetryOutcome, MessageKey | null> = {
+  retried: null,
+  retried_unrecorded: "forms.errorRetryUnrecorded",
+  gone: "forms.failureRetryGone",
+  not_retryable: "forms.errorRetryNotPossible",
+};
 
 function writeError(error: PostgrestError): MessageKey {
   if (error.code === INSUFFICIENT_PRIVILEGE) return "forms.errorForbidden";

@@ -7,6 +7,7 @@ import {
   getCurrentVersion,
   getForm,
   getFormDraft,
+  listDeliveryFailures,
   listFormPasses,
   listFormVersions,
 } from "@/lib/forms/queries.ts";
@@ -19,6 +20,7 @@ import {
   CurrentVersionBadge,
   CurrentVersionDetails,
 } from "./CurrentVersion.tsx";
+import { DeliveryFailures } from "./DeliveryFailures.tsx";
 import { DiscardButton } from "./DraftReset.tsx";
 import { DraftStatusProvider } from "./DraftStatus.tsx";
 import { EmailTemplateEditor } from "./EmailTemplateEditor.tsx";
@@ -39,14 +41,15 @@ export async function generateMetadata({
 
 /**
  * A form: the designer and the email editor on its draft, its version
- * history, its settings and its form passes (`?view=email`,
- * `?view=versions`, `?view=settings`, `?view=passes`), with the version
- * visitors see above all of them and *Veröffentlichen* and *Änderungen
- * verwerfen* next to the draft's editors. Forms of teams the person does
- * not belong to are not found (RLS); every member of the owning team may
- * edit the draft, publish it, restore a version, discard changes, change
- * the settings, create and revoke form passes, and archive the form. Only
- * Super Admins see *Endgültig löschen*. An archived form still opens here,
+ * history, its settings, its form passes and its delivery failures
+ * (`?view=email`, `?view=versions`, `?view=settings`, `?view=passes`,
+ * `?view=failures`), with the version visitors see above all of them and
+ * *Veröffentlichen* and *Änderungen verwerfen* next to the draft's editors.
+ * Forms of teams the person does not belong to are not found (RLS); every
+ * member of the owning team may edit the draft, publish it, restore a
+ * version, discard changes, change the settings, create and revoke form
+ * passes, retry failed deliveries, and archive the form. Only Super Admins
+ * see *Endgültig löschen*. An archived form still opens here,
  * with a notice, so it can be taken out of the archive.
  */
 export default async function FormPage({
@@ -60,10 +63,11 @@ export default async function FormPage({
     getFormDraft(id),
   ]);
   if (!form || !draft) notFound();
-  const [current, versions, passes] = await Promise.all([
+  const [current, versions, passes, failures] = await Promise.all([
     getCurrentVersion(form),
     listFormVersions(form.id),
     listFormPasses(form.id),
+    listDeliveryFailures(form.id),
   ]);
   const draftActions = (
     <Group gap="xs" wrap="nowrap">
@@ -179,6 +183,7 @@ export default async function FormPage({
               passes={passes}
             />
           ),
+          failures: <DeliveryFailures failures={failures} />,
         }}
       />
     </DraftStatusProvider>

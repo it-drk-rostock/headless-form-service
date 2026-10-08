@@ -310,6 +310,25 @@ npx supabase secrets set MAILJET_API_KEY=<key> MAILJET_SECRET_KEY=<secret> NOTIF
 
 The sender address must be validated in Mailjet, and its domain needs SPF and DKIM for Mailjet (`.scratch/sender-domain/spec.md`).
 
+### Retrying failed deliveries
+
+The *Fehler* view of `/forms/[id]` lists a form's delivery failures, newest first (blueprint §4.5): submission time and ID, version, reason and status (*Fehlgeschlagen* in red, *Wird erneut zugestellt* in orange). Never answers. Members of the form's team and Super Admins see them; signed-in people read `public.form_stats` through RLS, every column but `qstash_message_id`, and write nothing.
+
+- *Zustellung wiederholen* is offered for 7 days after the failure (`form_stats.failed_at`), while QStash keeps the message in its DLQ. The dashboard server gets the message ID from `public.delivery_retry_message(submission)` and retries it with its own `QSTASH_TOKEN` in one call, `POST /v2/dlq/retry?messageId=<id>` (`lib/forms/dead-letter-queue.ts`). QStash queues a copy with the same encrypted body and failure callback. The dashboard never receives the body, not even encrypted (ADR-0002).
+- `public.record_delivery_retry(submission, message)` then sets the row back to `queued` under the new message ID, sets `retried_at`, and writes `delivery.retried` (form name, version, submission time) to the audit log (*Zustellung wiederholt*). The row stays listed as *Wird erneut zugestellt* until `/dispatch-email` marks it `sent`, or `failed` again, which can then be retried again.
+- If QStash retried nothing, the message is gone: `public.record_delivery_retry_gone(submission, message)` sets `dlq_gone_at` and writes `delivery.retry_unavailable` (*Zustellung nicht mehr wiederholbar*). The row then explains that the submission cannot be delivered any more. After 7 days the row says so without asking QStash. All three functions are open to the members of the form's team and Super Admins only.
+- If QStash or the database fails before the retry, nothing changes and the row shows an error. If the retry is out but cannot be recorded, the row says so: the submission is delivered, but the audit log lacks the retry.
+- Known limits: the two record functions trust the dashboard to report what QStash answered. A team member calling them directly through the Data API could mark their own team's failure as retried (it then shows *Wird erneut zugestellt* for good) or as gone. That person is named in the audit log. If a retried copy fails again before the retry is recorded (it takes about 30 minutes of QStash retries), the row stays `queued`.
+- Checks 45–46 of `supabase/snippets/rls-checklist-teams.sql` cover it.
+
+The dashboard server needs the QStash token (EU region, the same as for `/submit-form`). Locally in `.env.local`; in production as a Worker secret:
+
+```bash
+npx wrangler secret put QSTASH_TOKEN
+```
+
+`QSTASH_URL` overrides QStash's default (EU) address, and must stay an EU one (ADR-0002).
+
 ### Embedding forms
 
 Editors paste this into a TYPO3 HTML content element (blueprint §6):

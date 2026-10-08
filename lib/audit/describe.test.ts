@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatDateTime } from "../i18n/index.ts";
 import { actorName, describeAuditEntry } from "./describe.ts";
 
 describe("describeAuditEntry", () => {
@@ -314,6 +315,34 @@ describe("describeAuditEntry", () => {
         details: { name: "Kontakt" },
       }),
     ).toEqual({ action: "Pass widerrufen", summary: "Kontakt" });
+  });
+
+  it("names the form, version and submission time of a retried delivery", () => {
+    expect(
+      describeAuditEntry({
+        action: "delivery.retried",
+        details: {
+          name: "Kontakt",
+          version: 2,
+          submitted_at: "2026-10-07T08:30:00+00:00",
+        },
+      }),
+    ).toEqual({
+      action: "Zustellung wiederholt",
+      summary: `Kontakt: Version 2, eingegangen am ${formatDateTime("2026-10-07T08:30:00+00:00")}`,
+    });
+  });
+
+  it("names the delivery that could no longer be retried", () => {
+    expect(
+      describeAuditEntry({
+        action: "delivery.retry_unavailable",
+        details: { name: "Kontakt", version: 2, submitted_at: null },
+      }),
+    ).toEqual({
+      action: "Zustellung nicht mehr wiederholbar",
+      summary: "Kontakt: Version 2, eingegangen am ",
+    });
   });
 
   it("shows actions it does not know yet as they are stored", () => {

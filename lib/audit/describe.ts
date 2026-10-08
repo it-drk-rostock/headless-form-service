@@ -142,6 +142,14 @@ const actions: Record<
     label: t("audit.action.formPassRevoked"),
     summary: (d) => text(d.name),
   },
+  "delivery.retried": {
+    label: t("audit.action.deliveryRetried"),
+    summary: (d) => delivery(d),
+  },
+  "delivery.retry_unavailable": {
+    label: t("audit.action.deliveryRetryUnavailable"),
+    summary: (d) => delivery(d),
+  },
   "settings.origins_changed": {
     label: t("audit.action.settingsOriginsChanged"),
     summary: (d) => listChanges(texts(d.from), texts(d.to)),
@@ -209,6 +217,18 @@ export function describeAuditEntry(
 /** Who acted: their address at the time, or the system (service role, SQL editor). */
 export function actorName(entry: Pick<AuditEntry, "actorEmail">): string {
   return entry.actorEmail || t("audit.actorSystem");
+}
+
+/** The form, version and submission time of a delivery, never its answers. */
+function delivery(details: Details): string {
+  return t("audit.summary.delivery", {
+    name: text(details.name),
+    version: text(details.version),
+    at:
+      typeof details.submitted_at === "string"
+        ? formatDateTime(details.submitted_at)
+        : "",
+  });
 }
 
 function member(details: Details): string {
