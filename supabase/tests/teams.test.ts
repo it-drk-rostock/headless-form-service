@@ -401,6 +401,32 @@ describe("manual RLS checklist", () => {
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 46 failed/);
   });
 
+  it("catches form loads open to other teams", async () => {
+    await db.exec(`create policy "leak" on public.form_load_counts for select
+      to authenticated using (true)`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 47 failed/);
+  });
+
+  it("catches statistics open to other teams", async () => {
+    await db.exec(
+      "alter function public.form_statistics(uuid, integer) security definer",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 47 failed/);
+  });
+
+  it("catches statistics members of the form's team cannot see", async () => {
+    await db.exec(`drop policy "Members see their teams' form loads, Super Admins see all"
+      on public.form_load_counts`);
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 47 failed/);
+  });
+
+  it("catches anon reading statistics", async () => {
+    await db.exec(
+      "grant execute on function public.form_statistics(uuid, integer) to anon",
+    );
+    await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);
+  });
+
   it("catches any table the anon role can read", async () => {
     await db.exec("grant select on public.form_load_counts to anon");
     await expect(db.exec(checklist)).rejects.toThrow(/RLS check 32 failed/);

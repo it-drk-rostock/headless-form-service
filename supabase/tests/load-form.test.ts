@@ -167,11 +167,17 @@ describe("count_form_load", () => {
   });
 
   it("cannot be bypassed by writing the counts directly", async () => {
-    for (const who of ["anon", { userId: max }] as const) {
-      await expect(
-        queryAs(db, who, "select * from public.form_load_counts"),
-      ).rejects.toMatchObject({ code: "42501" });
-    }
+    await expect(
+      queryAs(db, "anon", "select * from public.form_load_counts"),
+    ).rejects.toMatchObject({ code: "42501" });
+    // Signed-in people read them for the statistics (ticket 32), never write.
+    await expect(
+      queryAs(
+        db,
+        { userId: max },
+        "update public.form_load_counts set count = 1000",
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
     await expect(
       commitAs(
         db,

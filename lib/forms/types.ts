@@ -66,6 +66,7 @@ export const FORM_VIEWS = [
   "versions",
   "settings",
   "passes",
+  "statistics",
   "failures",
 ] as const;
 export type FormView = (typeof FORM_VIEWS)[number];

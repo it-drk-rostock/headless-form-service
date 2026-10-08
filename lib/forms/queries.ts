@@ -34,6 +34,11 @@ import {
   toFormVersion,
 } from "./publish.ts";
 import {
+  type FormStatistics,
+  parseFormStatistics,
+  type StatisticsPeriod,
+} from "./statistics.ts";
+import {
   type FormAccessType,
   type FormDetails,
   type FormSummary,
@@ -258,4 +263,26 @@ export async function listDeliveryFailures(
   }
   const now = new Date();
   return data.map((row) => toDeliveryFailure(row, now));
+}
+
+/**
+ * A form's statistics for the last `days` Berlin days (today by hour for 1),
+ * or null when the person may not see the form. Counted in the database
+ * (`public.form_statistics`), which runs as the person, so RLS decides.
+ */
+export async function getFormStatistics(
+  id: string,
+  days: StatisticsPeriod,
+): Promise<FormStatistics | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("form_statistics", {
+    form: id,
+    days,
+  });
+  if (error) {
+    throw new Error(
+      `Statistics of form ${id} could not be loaded: ${error.message}`,
+    );
+  }
+  return parseFormStatistics(data);
 }

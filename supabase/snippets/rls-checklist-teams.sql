@@ -1,8 +1,8 @@
--- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing, archiving and deleting forms, form passes, and delivery failures and their retry (tickets 04-10, 20-25, 31). Run it in the Supabase SQL editor
+-- Manual RLS checklist for teams, memberships, the audit log, forms, the draft, publishing, loading forms, the global settings, allowed recipient domains, restoring and discarding, closing, archiving and deleting forms, form passes, delivery failures and their retry, and statistics (tickets 04-10, 20-25, 31, 32). Run it in the Supabase SQL editor
 -- after `npm run db:push`. It creates a test team setup inside a transaction,
 -- checks each rule as the person it concerns, and rolls everything back.
 --
--- Passed: the result is "RLS checklist passed: 46 of 46 checks". Failed: it stops with
+-- Passed: the result is "RLS checklist passed: 47 of 47 checks". Failed: it stops with
 -- "RLS check <n> failed: ..." and nothing is kept.
 --
 -- Test setup (all rolled back):
@@ -12,6 +12,7 @@
 --   Member B     …c004  member of team B
 --   Form A       …f1    of team A;  Form B  …f2  of team B
 --   Submission   …d1    of form A, failed (added after Member A's checks)
+--   7 loads of form A today (added with the submission)
 -- `npm test` runs this file against the migrations (supabase/tests/).
 
 begin;
@@ -299,13 +300,17 @@ begin
   end;
 end $$;
 
--- A failed delivery of form A's version 1 (check 28), for checks 45 and 46.
+-- A failed delivery of form A's version 1 (check 28), for checks 45 and 46,
+-- and form A's loads today, for check 47.
 reset role;
 insert into public.form_stats
   (id, form_id, version, status, failure_reason, failed_at, qstash_message_id)
 values ('00000000-0000-4000-8000-0000000000d1',
         '00000000-0000-4000-8000-0000000000f1', 1, 'failed', 'HTTP 500', now(),
         'rls-check-message');
+insert into public.form_load_counts (form_id, day, count)
+values ('00000000-0000-4000-8000-0000000000f1',
+        (now() at time zone 'Europe/Berlin')::date, 7);
 
 -- As Member B ---------------------------------------------------------------
 reset role;
@@ -358,6 +363,15 @@ begin
     raise exception 'RLS check 45 failed: Member B recorded a retry of team A''s delivery';
   exception when insufficient_privilege then null;
   end;
+
+  -- 47. A member sees no statistics or form loads of other teams.
+  if exists (select 1 from public.form_load_counts
+             where form_id = '00000000-0000-4000-8000-0000000000f1') then
+    raise exception 'RLS check 47 failed: Member B sees team A''s form loads';
+  end if;
+  if public.form_statistics('00000000-0000-4000-8000-0000000000f1', 7) is not null then
+    raise exception 'RLS check 47 failed: Member B sees team A''s statistics';
+  end if;
 end $$;
 
 -- As the Team Admin of team A -------------------------------------------------
@@ -532,6 +546,13 @@ begin
                    and entity_id = '00000000-0000-4000-8000-0000000000d1'
                    and actor_id = '00000000-0000-4000-8000-00000000c002') then
     raise exception 'RLS check 46 failed: the retry of check 45 is not in the audit log';
+  end if;
+
+  -- 47. A member of the form's team sees its statistics: today's submission
+  -- and loads.
+  if (public.form_statistics('00000000-0000-4000-8000-0000000000f1', 1) -> 'totals')
+     is distinct from '{"submissions": 1, "queued": 1, "sent": 0, "failed": 0, "loads": 7}'::jsonb then
+    raise exception 'RLS check 47 failed: the Team Admin does not see team A''s statistics';
   end if;
 
   -- 42. Only Super Admins delete forms for good, not even a Team Admin.
@@ -786,11 +807,14 @@ begin
   if has_function_privilege('anon', 'public.delivery_retry_message(uuid)', 'execute') then
     raise exception 'RLS check 32 failed: anon can call delivery_retry_message';
   end if;
+  if has_function_privilege('anon', 'public.form_statistics(uuid, integer)', 'execute') then
+    raise exception 'RLS check 32 failed: anon can call form_statistics';
+  end if;
 end $$;
 
 reset role;
 
 -- Shown as the result in the SQL editor; reached only if every check passed.
-select 'RLS checklist passed: 46 of 46 checks' as result;
+select 'RLS checklist passed: 47 of 47 checks' as result;
 
 rollback;

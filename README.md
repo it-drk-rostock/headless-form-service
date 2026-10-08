@@ -329,6 +329,16 @@ npx wrangler secret put QSTASH_TOKEN
 
 `QSTASH_URL` overrides QStash's default (EU) address, and must stay an EU one (ADR-0002).
 
+### Statistics
+
+The *Statistik* view of `/forms/[id]` (`?view=statistics&period=1|7|30|90`, default 30) shows how a form is doing (blueprint §8). The period is today by hour, or the last 7, 30 or 90 days by day, in Berlin time.
+
+- Tiles: submissions, form loads, conversion (submissions per load) and delivery (sent out of sent plus failed, with both counts). Conversion can exceed 100 % when forms loaded before the period are sent within it.
+- Below them: sent, failed and still queued as one bar, a bar chart of submissions per hour or day (hover for the point's sent, failed and loads), and the submissions per form version with their share.
+- `public.form_statistics(form, days)` counts it all in the database and returns JSON. It runs as the caller, so RLS decides: members of the form's team and Super Admins get the numbers, everyone else `null`. Signed-in people now also read `public.form_load_counts` through RLS, and write nothing. The anon role still has no access (ADR-0004).
+- Loads are counted per day only (`count_form_load`), so the hourly chart has no loads. Today's loads go into the tiles. On the days clocks change, the doubled hour counts once and the skipped hour stays empty.
+- Check 47 of `supabase/snippets/rls-checklist-teams.sql` covers it, and check 32 covers anon.
+
 ### Embedding forms
 
 Editors paste this into a TYPO3 HTML content element (blueprint §6):

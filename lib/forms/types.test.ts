@@ -36,6 +36,7 @@ describe("formView", () => {
     expect(formView("designer")).toBe("designer");
     expect(formView("email")).toBe("email");
     expect(formView("versions")).toBe("versions");
+    expect(formView("statistics")).toBe("statistics");
     expect(formView("failures")).toBe("failures");
   });
 

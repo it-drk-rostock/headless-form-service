@@ -38,3 +38,13 @@ const dateTimeFormat = new Intl.DateTimeFormat("de-DE", {
 export function formatDateTime(isoTimestamp: string): string {
   return dateTimeFormat.format(new Date(isoTimestamp));
 }
+
+const percentFormat = new Intl.NumberFormat("de-DE", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+
+/** A share as a German percentage, e.g. "12,5 %". */
+export function formatPercent(share: number): string {
+  return percentFormat.format(share);
+}
