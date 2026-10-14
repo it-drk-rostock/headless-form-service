@@ -51,9 +51,7 @@ export default function DraftCreator({
       autoSaveEnabled: true,
       showThemeTab: false,
       showTranslationTab: false,
-      // Hidden so questions can only come from the toolbox, which has no
-      // file or signature questions. The database refuses them regardless.
-      showJSONEditorTab: false,
+      showJSONEditorTab: true,
     });
     creator.locale = "de";
     for (const type of DISABLED_QUESTION_TYPES) {
