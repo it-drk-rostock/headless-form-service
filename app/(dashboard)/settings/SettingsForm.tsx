@@ -26,6 +26,7 @@ import { FormError } from "../../_components/FormError.tsx";
 const initialState: SettingsActionState = { error: null };
 
 type Values = {
+  globalTheme: string;
   allowedOrigins: string;
   allowedRecipientDomains: string;
   loadRateLimit: string;
@@ -43,11 +44,14 @@ export function SettingsForm({
   allowedRecipientDomains,
   loadRateLimit,
   submitRateLimit,
+  globalTheme,
 }: GlobalSettings) {
   // What is stored, as the page last rendered it. A save refreshes the page,
   // so the normalised lists (or another person's change) arrive here and
   // replace what is in the inputs.
   const stored: Values = {
+    globalTheme:
+      globalTheme === null ? "" : JSON.stringify(globalTheme, null, 2),
     allowedOrigins: allowedOrigins.join("\n"),
     allowedRecipientDomains: allowedRecipientDomains.join("\n"),
     loadRateLimit: String(loadRateLimit),
@@ -168,6 +172,31 @@ export function SettingsForm({
             setValues({ ...values, submitRateLimit })
           }
         />
+        <Textarea
+          name="globalTheme"
+          label={t("settings.globalTheme")}
+          description={t("settings.globalThemeHint")}
+          autosize
+          minRows={6}
+          maxRows={20}
+          value={values.globalTheme}
+          onChange={(event) =>
+            setValues({ ...values, globalTheme: event.currentTarget.value })
+          }
+          spellCheck={false}
+          styles={{
+            input: { fontFamily: "var(--mantine-font-family-monospace)" },
+          }}
+        />
+        <Button
+          variant="default"
+          size="xs"
+          w="fit-content"
+          disabled={pending || values.globalTheme === ""}
+          onClick={() => setValues({ ...values, globalTheme: "" })}
+        >
+          {t("settings.clearTheme")}
+        </Button>
       </Stack>
     </Box>
   );
@@ -199,6 +228,7 @@ function RateLimitInput({
 
 function sameValues(a: Values, b: Values): boolean {
   return (
+    a.globalTheme === b.globalTheme &&
     a.allowedOrigins === b.allowedOrigins &&
     a.allowedRecipientDomains === b.allowedRecipientDomains &&
     a.loadRateLimit === b.loadRateLimit &&

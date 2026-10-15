@@ -79,6 +79,27 @@ const get = (
 };
 
 describe("handleLoadForm", () => {
+  it("returns the current effective theme on each load without changing the published version", async () => {
+    const { deps } = fakes();
+    let theme: Record<string, unknown> | null = {
+      cssVariables: { "--sjs-primary-backcolor": "#123456" },
+    };
+    deps.loadForm = async () => ({
+      version: 3,
+      schema: SCHEMA,
+      theme,
+      accessType: "public",
+      turnstileEnabled: false,
+      isClosed: false,
+    });
+    expect(
+      await (await handleLoadForm(get(`?form_id=${FORM}`), deps)).json(),
+    ).toMatchObject({ version: 3, theme });
+    theme = null;
+    expect(
+      await (await handleLoadForm(get(`?form_id=${FORM}`), deps)).json(),
+    ).toMatchObject({ version: 3, theme: null });
+  });
   it("serves the published custom theme", async () => {
     const theme = { cssVariables: { "--sjs-primary-backcolor": "#123456" } };
     const { deps } = fakes({

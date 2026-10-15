@@ -37,11 +37,13 @@ export default function DraftCreator({
   formId,
   schema,
   theme,
+  globalTheme,
   onSaved,
 }: {
   formId: string;
   schema: DraftSchema;
   theme: ITheme | null;
+  globalTheme: ITheme | null;
   onSaved: (result: DraftSaveResult) => void;
 }) {
   // Saves run from Creator's callback, which is set up once; it calls the
@@ -73,7 +75,7 @@ export default function DraftCreator({
       creator.toolbox.removeItem(type);
     }
     creator.JSON = schema;
-    creator.theme = structuredClone(theme ?? DefaultLight);
+    creator.theme = structuredClone(theme ?? globalTheme ?? DefaultLight);
     creator.onActiveTabChanged.add(() => {
       syncThemeEditing(creator);
     });
@@ -178,7 +180,7 @@ export default function DraftCreator({
     // it is active does not refresh SurveyJS's theme editor or its preview.
     const reopenTheme = creator.activeTab === "theme";
     if (reopenTheme) creator.activeTab = "designer";
-    creator.theme = structuredClone(value ?? DefaultLight);
+    creator.theme = structuredClone(value ?? globalTheme ?? DefaultLight);
     if (reopenTheme) creator.activeTab = "theme";
     syncThemeEditing(creator);
     themeChanges.current.made += 1;

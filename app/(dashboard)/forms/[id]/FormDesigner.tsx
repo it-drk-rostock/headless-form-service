@@ -30,10 +30,12 @@ export function FormDesigner({
   formId,
   schema,
   theme,
+  globalTheme,
 }: {
   formId: string;
   schema: DraftSchema;
   theme: ITheme | null;
+  globalTheme: ITheme | null;
 }) {
   const { setStamp, reset } = useDraftStatus();
   const [result, setResult] = useState<DraftSaveResult | null>(null);
@@ -74,6 +76,7 @@ export function FormDesigner({
           formId={formId}
           schema={reset.draft?.schema ?? schema}
           theme={reset.draft ? reset.draft.theme : theme}
+          globalTheme={globalTheme}
           onSaved={handleSaved}
         />
       </Paper>

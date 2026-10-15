@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { requireProfile } from "../auth/profile.ts";
 import type { MessageKey } from "../i18n/index.ts";
+import { isObject } from "../shared/object.ts";
 import { createClient } from "../supabase/server.ts";
 import { parseAllowedOrigins } from "./origins.ts";
 import { parseRateLimit } from "./rate-limits.ts";
@@ -57,6 +58,16 @@ export async function updateSettings(
 
   const profile = await requireProfile();
   if (!profile.isSuperAdmin) return { error: "settings.errorForbidden" };
+  let globalTheme: unknown = null;
+  const themeInput = String(formData.get("globalTheme") ?? "").trim();
+  if (themeInput) {
+    try {
+      globalTheme = JSON.parse(themeInput);
+    } catch {
+      return { error: "settings.errorThemeJson" };
+    }
+    if (!isObject(globalTheme)) return { error: "settings.errorThemeInvalid" };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("settings")
@@ -65,11 +76,18 @@ export async function updateSettings(
       allowed_recipient_domains: recipientDomains.domains,
       load_rate_limit: loadRateLimit,
       submit_rate_limit: submitRateLimit,
+      global_theme: globalTheme,
     })
     .eq("id", true)
     .select("id");
   if (error?.code === INSUFFICIENT_PRIVILEGE) {
     return { error: "settings.errorForbidden" };
+  }
+  if (
+    error?.code === "23514" &&
+    error.message.includes("settings_global_theme_check")
+  ) {
+    return { error: "settings.errorThemeInvalid" };
   }
   if (error) {
     console.error("Settings could not be saved", error);

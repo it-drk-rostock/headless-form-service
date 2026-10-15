@@ -15,6 +15,7 @@ import {
 import { statisticsPeriod } from "@/lib/forms/statistics.ts";
 import { formView } from "@/lib/forms/types.ts";
 import { formatDate, formatDateTime, t } from "@/lib/i18n/index.ts";
+import { getGlobalTheme } from "@/lib/settings/queries.ts";
 import { passPlaceholders } from "@/lib/shared/notification.ts";
 import { AnchorLink } from "../../../_components/AnchorLink.tsx";
 import { FormStatusBadge } from "../FormStatusBadge.tsx";
@@ -64,10 +65,11 @@ export default async function FormPage({
   const { id } = await params;
   const search = await searchParams;
   const period = statisticsPeriod(search.period);
-  const [profile, form, draft] = await Promise.all([
+  const [profile, form, draft, globalTheme] = await Promise.all([
     requireProfile(),
     getForm(id),
     getFormDraft(id),
+    getGlobalTheme(),
   ]);
   if (!form || !draft) notFound();
   const [current, versions, passes, failures, statistics] = await Promise.all([
@@ -128,6 +130,7 @@ export default async function FormPage({
               formId={form.id}
               schema={draft.schema}
               theme={draft.theme}
+              globalTheme={globalTheme}
             />
           ),
           email: (

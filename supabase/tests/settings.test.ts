@@ -98,6 +98,45 @@ describe("repairing a missing settings row", () => {
 });
 
 describe("who may read and change the settings", () => {
+  it("lets members read only the global theme and reserves changes for Super Admins", async () => {
+    const theme = { cssVariables: { "--sjs-primary-backcolor": "#123456" } };
+    await commitAs(
+      db,
+      { userId: root },
+      "update public.settings set global_theme = $1",
+      [theme],
+    );
+    expect(
+      await queryAs(
+        db,
+        { userId: anna },
+        "select public.get_global_theme() as theme",
+      ),
+    ).toEqual([{ theme }]);
+    expect(await queryAs(db, { userId: anna }, READ)).toEqual([]);
+    expect(
+      await queryAs(
+        db,
+        { userId: anna },
+        "update public.settings set global_theme = null returning 1",
+      ),
+    ).toEqual([]);
+    await expect(
+      queryAs(db, "anon", "select public.get_global_theme()"),
+    ).rejects.toThrow(/permission denied/);
+    await commitAs(
+      db,
+      { userId: root },
+      "update public.settings set global_theme = null",
+    );
+    expect(
+      await queryAs(
+        db,
+        { userId: anna },
+        "select public.get_global_theme() as theme",
+      ),
+    ).toEqual([{ theme: null }]);
+  });
   it("lets Super Admins read them", async () => {
     expect(await queryAs(db, { userId: root }, READ)).toEqual([
       {
@@ -167,6 +206,76 @@ describe("who may read and change the settings", () => {
 });
 
 describe("the database refuses invalid values", () => {
+  it.each([
+    [],
+    "default",
+    { isPanelless: "yes" },
+    { colorPalette: "blue" },
+    { backgroundOpacity: 2 },
+    { cssVariables: [] },
+    { cssVariables: { "--sjs-primary-backcolor": 123 } },
+    { header: { height: "large" } },
+    { header: { titlePositionX: "top" } },
+    { notAThemeProperty: true },
+  ])("preserves the saved theme when invalid input is submitted: %j", async (invalid) => {
+    const theme = {
+      themeName: "default",
+      cssVariables: { "--sjs-primary-backcolor": "#123456" },
+    };
+    await commitAs(
+      db,
+      { userId: root },
+      "update public.settings set global_theme = $1",
+      [theme],
+    );
+    await expect(
+      queryAs(
+        db,
+        { userId: root },
+        "update public.settings set global_theme = $1",
+        [JSON.stringify(invalid)],
+      ),
+    ).rejects.toThrow(/settings_global_theme_check/);
+    expect(
+      await queryAs(
+        db,
+        { userId: root },
+        "select global_theme from public.settings",
+      ),
+    ).toEqual([{ global_theme: theme }]);
+  });
+
+  it("round-trips a SurveyJS theme including advanced header settings", async () => {
+    const theme = {
+      themeName: "default",
+      colorPalette: "dark",
+      isPanelless: false,
+      backgroundOpacity: 0.5,
+      headerView: "advanced",
+      header: {
+        height: 200,
+        titlePositionX: "center",
+        backgroundImageFit: "tile",
+      },
+      cssVariables: { "--sjs-primary-backcolor": "#123456" },
+    };
+    await commitAs(
+      db,
+      { userId: root },
+      "update public.settings set global_theme = $1",
+      [theme],
+    );
+    expect(
+      await queryAs(
+        db,
+        { userId: anna },
+        "select public.get_global_theme() as theme",
+      ),
+    ).toEqual([{ theme }]);
+    expect((await entries()).map((e) => e.action)).toContain(
+      "settings.theme_changed",
+    );
+  });
   it.each([
     ["a path", "https://www.drk-rostock.de/kurse"],
     ["a trailing slash", "https://www.drk-rostock.de/"],

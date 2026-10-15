@@ -38,6 +38,87 @@ const SECOND_TEMPLATE = {
 const RESTORE = "select public.restore_form_version($1, $2)";
 const DISCARD = "select public.discard_draft_changes($1)";
 
+it("resolves inherited versions against today's global theme without republishing or copying overrides", async () => {
+  await saveDraft(FIRST, FIRST_TEMPLATE);
+  await publish();
+  const global = {
+    cssVariables: {
+      "--sjs-primary-backcolor": "#123456",
+      "--sjs-font-family": "serif",
+    },
+  };
+  const custom = { cssVariables: { "--sjs-primary-backcolor": "#abcdef" } };
+  const load = () =>
+    commitAs(db, "service", "select version, theme from public.load_form($1)", [
+      form,
+    ]);
+  const setGlobal = (theme: unknown) =>
+    commitAs(
+      db,
+      { userId: root },
+      "update public.settings set global_theme = $1",
+      [theme],
+    );
+  const setCustom = (theme: unknown) =>
+    commitAs(
+      db,
+      { userId: max },
+      "update public.forms set draft_theme = $2 where id = $1",
+      [form, theme],
+    );
+  expect(await load()).toEqual([{ version: 1, theme: null }]);
+  await setGlobal(global);
+  expect(await load()).toEqual([{ version: 1, theme: global }]);
+  await setCustom(custom);
+  expect(await load()).toEqual([{ version: 1, theme: global }]);
+  await publish();
+  expect(await load()).toEqual([{ version: 2, theme: custom }]);
+  await setGlobal({ isPanelless: true });
+  expect(await load()).toEqual([{ version: 2, theme: custom }]);
+  await commitAs(db, { userId: max }, RESTORE, [form, 1]);
+  expect(
+    await queryAs(
+      db,
+      { userId: max },
+      "select draft_theme from public.forms where id = $1",
+      [form],
+    ),
+  ).toEqual([{ draft_theme: null }]);
+  await commitAs(db, { userId: max }, DISCARD, [form]);
+  expect(
+    await queryAs(
+      db,
+      { userId: max },
+      "select draft_theme from public.forms where id = $1",
+      [form],
+    ),
+  ).toEqual([{ draft_theme: custom }]);
+  await setCustom(null);
+  expect(await load()).toEqual([{ version: 2, theme: custom }]);
+  await publish();
+  expect(await load()).toEqual([{ version: 3, theme: { isPanelless: true } }]);
+  await setGlobal(null);
+  expect(await load()).toEqual([{ version: 3, theme: null }]);
+  await setGlobal(global);
+  expect(await load()).toEqual([{ version: 3, theme: global }]);
+  expect(
+    await queryAs(
+      db,
+      { userId: max },
+      "select theme from public.form_versions where form_id = $1 order by version",
+      [form],
+    ),
+  ).toEqual([{ theme: null }, { theme: custom }, { theme: null }]);
+  expect(
+    await queryAs(
+      db,
+      { userId: max },
+      "select draft_theme from public.forms where id = $1",
+      [form],
+    ),
+  ).toEqual([{ draft_theme: null }]);
+});
+
 beforeEach(async () => {
   db = await migratedDatabase();
   firstAid = await createTeam(db, "Erste Hilfe");

@@ -108,6 +108,14 @@ export const de = {
   "forms.viewPasses": "Pässe",
   "forms.viewStatistics": "Statistik",
   "forms.viewFailures": "Fehler",
+  "settings.globalTheme": "Globales Formulardesign (SurveyJS JSON)",
+  "settings.globalThemeHint":
+    "Gilt beim nächsten Laden für Formulare ohne eigenes Design. Leer lassen und speichern, um das Standarddesign zu verwenden.",
+  "settings.clearTheme": "Design entfernen",
+  "settings.errorThemeJson":
+    "Das Design enthält ungültiges JSON. Bitte die JSON-Syntax prüfen.",
+  "settings.errorThemeInvalid":
+    "Bitte ein SurveyJS-Designobjekt mit gültigen Eigenschaften, Typen und Werten eingeben (z. B. cssVariables mit CSS-Variablen und Textwerten).",
   "forms.themeChoice": "Formulardesign",
   "forms.themeInherit": "Standarddesign übernehmen",
   "forms.themeCustom": "Eigenes Formulardesign",

@@ -24,6 +24,25 @@ const json = (body: unknown, status = 200) =>
   });
 
 describe("loadForm", () => {
+  it("uses the effective theme returned by each new load of the same published version", async () => {
+    let theme: unknown = {
+      cssVariables: { "--sjs-primary-backcolor": "#123456" },
+    };
+    const { fetch } = fakeFetch(() =>
+      json({ version: 3, schema: SCHEMA, theme }),
+    );
+    expect(await loadForm(FORM, { endpoint: ENDPOINT, fetch })).toMatchObject({
+      kind: "ready",
+      version: 3,
+      theme,
+    });
+    theme = null;
+    expect(await loadForm(FORM, { endpoint: ENDPOINT, fetch })).toMatchObject({
+      kind: "ready",
+      version: 3,
+      theme: null,
+    });
+  });
   it("transports the published theme independently of questions", async () => {
     const theme = {
       themeName: "default",
