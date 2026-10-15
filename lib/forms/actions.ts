@@ -15,6 +15,7 @@ import {
   normalizeSenderName,
   parseEmailTemplate,
 } from "../shared/notification.ts";
+import { isObject } from "../shared/object.ts";
 import { isUuid } from "../shared/uuid.ts";
 import { createClient } from "../supabase/server.ts";
 import { isTeamId } from "../teams/id.ts";
@@ -233,10 +234,23 @@ export async function saveEmailTemplate(
   });
 }
 
+/** Saves only the appearance choice; null returns the draft to inheritance. */
+export async function saveDraftTheme(
+  id: string,
+  theme: unknown,
+): Promise<DraftSaveResult> {
+  if (theme !== null && !isObject(theme))
+    return { error: "forms.errorDraftInvalid" };
+  return updateDraft(id, { draft_theme: theme });
+}
+
 /** Writes a part of the form's draft, which the database stamps. */
 async function updateDraft(
   id: string,
-  part: { draft_schema: unknown } | { draft_email_template: unknown },
+  part:
+    | { draft_schema: unknown }
+    | { draft_email_template: unknown }
+    | { draft_theme: unknown },
 ): Promise<DraftSaveResult> {
   if (!isFormId(id)) return { error: "forms.errorForbidden" };
 

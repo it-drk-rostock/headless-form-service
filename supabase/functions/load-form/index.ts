@@ -42,6 +42,7 @@ Deno.serve((request) =>
         .maybeSingle<{
           version: number;
           schema: unknown;
+          theme: Record<string, unknown> | null;
           access_type: LoadedForm["accessType"];
           turnstile_enabled: boolean;
           is_closed: boolean;
@@ -52,6 +53,7 @@ Deno.serve((request) =>
         : {
             version: data.version,
             schema: data.schema,
+            theme: data.theme,
             accessType: data.access_type,
             turnstileEnabled: data.turnstile_enabled,
             isClosed: data.is_closed,

@@ -4,6 +4,7 @@ import { Alert, Box, Center, Group, Loader, Paper, Text } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import type { ITheme } from "survey-core";
 import type { DraftSaveResult } from "@/lib/forms/actions.ts";
 import type { DraftSchema } from "@/lib/forms/draft.ts";
 import { t } from "@/lib/i18n/index.ts";
@@ -28,9 +29,11 @@ const DraftCreator = dynamic(() => import("./DraftCreator.tsx"), {
 export function FormDesigner({
   formId,
   schema,
+  theme,
 }: {
   formId: string;
   schema: DraftSchema;
+  theme: ITheme | null;
 }) {
   const { setStamp, reset } = useDraftStatus();
   const [result, setResult] = useState<DraftSaveResult | null>(null);
@@ -70,6 +73,7 @@ export function FormDesigner({
           key={reset.resetCount}
           formId={formId}
           schema={reset.draft?.schema ?? schema}
+          theme={reset.draft ? reset.draft.theme : theme}
           onSaved={handleSaved}
         />
       </Paper>

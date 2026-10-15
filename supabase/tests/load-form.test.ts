@@ -64,6 +64,7 @@ describe("load_form", () => {
         access_type: "public",
         turnstile_enabled: true,
         is_closed: false,
+        theme: null,
       },
     ]);
   });
@@ -241,4 +242,32 @@ describe("settings", () => {
       ),
     ).rejects.toMatchObject({ code: "42501" });
   });
+});
+
+it("loads only the published theme until the new choice is published", async () => {
+  const theme = { cssVariables: { "--sjs-primary-backcolor": "#123456" } };
+  await publish(questions("vorname"));
+  await commitAs(
+    db,
+    { userId: max },
+    "update public.forms set draft_theme = $2 where id = $1",
+    [form, theme],
+  );
+  expect(await commitAs(db, "service", LOAD, [form])).toEqual([
+    expect.objectContaining({ theme: null }),
+  ]);
+  await publish(questions("vorname"));
+  await commitAs(
+    db,
+    { userId: max },
+    "update public.forms set draft_theme = null where id = $1",
+    [form],
+  );
+  expect(await commitAs(db, "service", LOAD, [form])).toEqual([
+    expect.objectContaining({ theme }),
+  ]);
+  await publish(questions("vorname"));
+  expect(await commitAs(db, "service", LOAD, [form])).toEqual([
+    expect.objectContaining({ theme: null }),
+  ]);
 });

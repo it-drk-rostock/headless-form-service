@@ -24,6 +24,21 @@ const json = (body: unknown, status = 200) =>
   });
 
 describe("loadForm", () => {
+  it("transports the published theme independently of questions", async () => {
+    const theme = {
+      themeName: "default",
+      cssVariables: { "--sjs-primary-backcolor": "#123456" },
+    };
+    const { fetch } = fakeFetch(() =>
+      json({ version: 3, schema: SCHEMA, theme }),
+    );
+    expect(await loadForm(FORM, { endpoint: ENDPOINT, fetch })).toMatchObject({
+      kind: "ready",
+      schema: SCHEMA,
+      theme,
+    });
+  });
+
   it.each([
     "https://www.drk-rostock.de/form?campaign=1",
     "https://www.drk-rostock.de/form?form_pass=",
@@ -71,6 +86,7 @@ describe("loadForm", () => {
       kind: "ready",
       version: 3,
       schema: SCHEMA,
+      theme: null,
       turnstileSiteKey: null,
     });
     expect(requested).toEqual([`${ENDPOINT}?form_id=${FORM}`]);
@@ -90,6 +106,7 @@ describe("loadForm", () => {
       kind: "ready",
       version: 3,
       schema: SCHEMA,
+      theme: null,
       turnstileSiteKey: "0x4AAAAAAAtestsitekey",
     });
   });

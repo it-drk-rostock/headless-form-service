@@ -108,6 +108,16 @@ export const de = {
   "forms.viewPasses": "Pässe",
   "forms.viewStatistics": "Statistik",
   "forms.viewFailures": "Fehler",
+  "forms.themeChoice": "Formulardesign",
+  "forms.themeInherit": "Standarddesign übernehmen",
+  "forms.themeCustom": "Eigenes Formulardesign",
+  "forms.themeInheritHint":
+    "Das Standarddesign wird übernommen. Wählen Sie ein eigenes Design, um es anzupassen.",
+  "forms.themeCustomHint":
+    "Änderungen werden automatisch im Entwurf gespeichert und erst durch Veröffentlichen sichtbar.",
+  "forms.themeSaveFailed":
+    "Das Formulardesign konnte nicht gespeichert werden. Bitte erneut versuchen.",
+  "forms.themeRetry": "Design erneut speichern",
   "forms.designerHint":
     "Änderungen werden automatisch im Entwurf gespeichert. Besucher sehen sie erst nach dem Veröffentlichen.",
   "forms.draftNeverSaved": "Entwurf noch nicht gespeichert",
@@ -187,7 +197,7 @@ export const de = {
   "forms.publish": "Veröffentlichen",
   "forms.publishTitle": "Entwurf veröffentlichen",
   "forms.publishText":
-    "Der Entwurf, Fragen und E-Mail-Vorlage, wird als Version {version} gespeichert. Besucher sehen ab sofort diese Version.",
+    "Der Entwurf mit Fragen, E-Mail-Vorlage und Formulardesign wird als Version {version} gespeichert. Besucher sehen ab sofort diese Version.",
   "forms.publishWaitsForSave":
     "Der Entwurf hat Änderungen, die noch nicht gespeichert sind. Veröffentlichen ist möglich, sobald sie gespeichert sind.",
   "forms.publishNoRecipients":
@@ -199,7 +209,7 @@ export const de = {
   "forms.published":
     "Version {version} ist veröffentlicht. Besucher sehen ab sofort diese Version.",
   "forms.versionsHint":
-    "Wiederherstellen übernimmt Fragen und E-Mail-Vorlage einer Version in den Entwurf. Besucher sehen sie erst, wenn der Entwurf als neue Version veröffentlicht ist.",
+    "Wiederherstellen übernimmt Fragen, E-Mail-Vorlage und Formulardesign einer Version in den Entwurf. Besucher sehen sie erst, wenn der Entwurf als neue Version veröffentlicht ist.",
   "forms.versionsEmptyTitle": "Noch keine Versionen",
   "forms.versionsEmptyHint":
     "Jedes Veröffentlichen legt eine neue Version an. Hier lassen sie sich ansehen und wiederherstellen.",
@@ -213,14 +223,14 @@ export const de = {
   "forms.restore": "Wiederherstellen",
   "forms.restoreTitle": "Version {version} wiederherstellen",
   "forms.restoreText":
-    "Fragen und E-Mail-Vorlage der Version {version} ersetzen den Entwurf. Änderungen im Entwurf, die noch nicht veröffentlicht sind, gehen dabei verloren. Besucher sehen weiter Version {current}, bis der Entwurf veröffentlicht ist.",
+    "Fragen, E-Mail-Vorlage und Formulardesign der Version {version} ersetzen den Entwurf. Änderungen im Entwurf, die noch nicht veröffentlicht sind, gehen dabei verloren. Besucher sehen weiter Version {current}, bis der Entwurf veröffentlicht ist.",
   "forms.restoreSubmit": "Wiederherstellen",
   "forms.restored":
     "Version {version} ist jetzt im Entwurf. Veröffentlicht wird sie als Version {next}.",
   "forms.discard": "Änderungen verwerfen",
   "forms.discardTitle": "Änderungen verwerfen",
   "forms.discardText":
-    "Fragen und E-Mail-Vorlage im Entwurf werden auf die aktuelle Version {version} zurückgesetzt. Alle Änderungen seit dem letzten Veröffentlichen gehen verloren.",
+    "Fragen, E-Mail-Vorlage und Formulardesign im Entwurf werden auf die aktuelle Version {version} zurückgesetzt. Alle Änderungen seit dem letzten Veröffentlichen gehen verloren.",
   "forms.discardSubmit": "Änderungen verwerfen",
   "forms.discarded": "Der Entwurf entspricht wieder Version {version}.",
   "forms.resetWaitsForSave":

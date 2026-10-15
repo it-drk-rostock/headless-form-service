@@ -340,3 +340,37 @@ describe("form versions", () => {
     ).rejects.toThrow(/forms_current_version_fkey/);
   });
 });
+
+it("snapshots a custom theme and then inheritance without changing earlier versions", async () => {
+  const theme = { cssVariables: { "--sjs-primary-backcolor": "#123456" } };
+  await commitAs(
+    db,
+    { userId: max },
+    "update public.forms set draft_theme = $2 where id = $1",
+    [form, theme],
+  );
+  await publish(max);
+  await commitAs(
+    db,
+    { userId: max },
+    "update public.forms set draft_theme = null where id = $1",
+    [form],
+  );
+  await publish(max);
+  const rows = await queryAs(
+    db,
+    { userId: max },
+    "select version, theme from public.form_versions where form_id = $1 order by version",
+    [form],
+  );
+  expect(rows).toEqual([
+    { version: 1, theme },
+    { version: 2, theme: null },
+  ]);
+  await expect(
+    db.query(
+      "update public.form_versions set theme = '{}' where form_id = $1",
+      [form],
+    ),
+  ).rejects.toThrow(/immutable/);
+});

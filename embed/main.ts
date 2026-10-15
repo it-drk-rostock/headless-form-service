@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { Model, surveyLocalization } from "survey-core";
 import surveyCss from "survey-core/survey-core.min.css";
+import { DefaultLight } from "survey-core/themes";
 import { Survey } from "survey-react-ui";
 import { FORM_PASS_PARAM } from "../lib/shared/form-pass.ts";
 import { loadForm } from "./load.ts";
@@ -93,6 +94,7 @@ async function mount(element: HTMLElement): Promise<void> {
 
   try {
     const model = new Model(result.schema);
+    model.applyTheme(result.theme ?? DefaultLight);
     // Answers to questions a visitor hid again are not sent.
     model.clearInvisibleValues = "onHidden";
 

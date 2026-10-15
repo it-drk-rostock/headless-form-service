@@ -27,6 +27,7 @@ function fakes(
     [FORM]: {
       version: 3,
       schema: SCHEMA,
+      theme: null,
       accessType: "public",
       turnstileEnabled: false,
       isClosed: false,
@@ -78,11 +79,32 @@ const get = (
 };
 
 describe("handleLoadForm", () => {
+  it("serves the published custom theme", async () => {
+    const theme = { cssVariables: { "--sjs-primary-backcolor": "#123456" } };
+    const { deps } = fakes({
+      [FORM]: {
+        version: 3,
+        schema: SCHEMA,
+        theme,
+        accessType: "public",
+        turnstileEnabled: false,
+        isClosed: false,
+      },
+    });
+    const response = await handleLoadForm(get(`?form_id=${FORM}`), deps);
+    expect(await response.json()).toMatchObject({
+      version: 3,
+      schema: SCHEMA,
+      theme,
+    });
+  });
+
   it("serves and counts repeated loads with a valid single-use pass without consuming it", async () => {
     const { deps, counted, passes } = fakes({
       [FORM]: {
         version: 3,
         schema: SCHEMA,
+        theme: null,
         accessType: "protected",
         turnstileEnabled: true,
         isClosed: false,
@@ -98,6 +120,7 @@ describe("handleLoadForm", () => {
       expect(await response.json()).toEqual({
         version: 3,
         schema: SCHEMA,
+        theme: null,
         access_type: "protected",
         turnstile_site_key: SITE_KEY,
       });
@@ -131,6 +154,7 @@ describe("handleLoadForm", () => {
       [FORM]: {
         version: 3,
         schema: SCHEMA,
+        theme: null,
         accessType: "protected",
         turnstileEnabled: true,
         isClosed: false,
@@ -159,6 +183,7 @@ describe("handleLoadForm", () => {
       [FORM]: {
         version: 3,
         schema: SCHEMA,
+        theme: null,
         accessType: "protected",
         turnstileEnabled: false,
         isClosed: false,
@@ -175,6 +200,7 @@ describe("handleLoadForm", () => {
     expect(await response.json()).toEqual({
       version: 3,
       schema: SCHEMA,
+      theme: null,
       access_type: "protected",
     });
   });
@@ -184,6 +210,7 @@ describe("handleLoadForm", () => {
       [FORM]: {
         version: 3,
         schema: SCHEMA,
+        theme: null,
         accessType: "protected",
         turnstileEnabled: false,
         isClosed: false,
@@ -212,6 +239,7 @@ describe("handleLoadForm", () => {
     expect(await response.json()).toEqual({
       version: 3,
       schema: SCHEMA,
+      theme: null,
       access_type: "public",
     });
     expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
@@ -223,6 +251,7 @@ describe("handleLoadForm", () => {
       [FORM]: {
         version: 3,
         schema: SCHEMA,
+        theme: null,
         accessType: "public",
         turnstileEnabled: true,
         isClosed: false,
@@ -235,6 +264,7 @@ describe("handleLoadForm", () => {
     expect(await response.json()).toEqual({
       version: 3,
       schema: SCHEMA,
+      theme: null,
       access_type: "public",
       turnstile_site_key: SITE_KEY,
     });
@@ -428,6 +458,7 @@ describe("handleLoadForm", () => {
       [FORM]: {
         version: 1,
         schema: SCHEMA,
+        theme: null,
         accessType: "protected",
         turnstileEnabled: true,
         isClosed: false,
@@ -446,6 +477,7 @@ describe("handleLoadForm", () => {
       [FORM]: {
         version: 3,
         schema: SCHEMA,
+        theme: null,
         accessType: "public",
         turnstileEnabled: true,
         isClosed: true,
@@ -466,6 +498,7 @@ describe("handleLoadForm", () => {
       [FORM]: {
         version: 3,
         schema: SCHEMA,
+        theme: null,
         accessType: "protected",
         turnstileEnabled: true,
         isClosed: true,

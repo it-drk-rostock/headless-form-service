@@ -123,7 +123,13 @@ export default async function FormPage({
           </Stack>
         }
         views={{
-          designer: <FormDesigner formId={form.id} schema={draft.schema} />,
+          designer: (
+            <FormDesigner
+              formId={form.id}
+              schema={draft.schema}
+              theme={draft.theme}
+            />
+          ),
           email: (
             <EmailTemplateEditor
               formId={form.id}

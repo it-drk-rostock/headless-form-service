@@ -20,6 +20,7 @@ import {
 export type LoadedForm = {
   version: number;
   schema: unknown;
+  theme: Record<string, unknown> | null;
   accessType: "public" | "protected";
   /** Whether the embed must show the Turnstile widget. */
   turnstileEnabled: boolean;
@@ -125,6 +126,7 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
   return reply({
     version: form.version,
     schema: form.schema,
+    theme: form.theme ?? null,
     access_type: form.accessType,
     ...(form.turnstileEnabled
       ? { turnstile_site_key: deps.turnstileSiteKey }

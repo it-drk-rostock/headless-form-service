@@ -1,3 +1,4 @@
+import type { ITheme } from "survey-core";
 import "server-only";
 import { cache } from "react";
 import { requireProfile } from "../auth/profile.ts";
@@ -146,13 +147,16 @@ export async function getFormDraft(id: string): Promise<FormDraft | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("forms")
-    .select(`draft_schema, draft_email_template, ${DRAFT_STAMP_COLUMNS}`)
+    .select(
+      `draft_schema, draft_email_template, draft_theme, ${DRAFT_STAMP_COLUMNS}`,
+    )
     .eq("id", id)
     .maybeSingle()
     .overrideTypes<
       DraftStampRow & {
         draft_schema: DraftSchema;
         draft_email_template: unknown;
+        draft_theme: ITheme | null;
       },
       { merge: false }
     >();
@@ -170,6 +174,7 @@ export async function getFormDraft(id: string): Promise<FormDraft | null> {
   return {
     schema: data.draft_schema,
     emailTemplate,
+    theme: data.draft_theme,
     stamp: toDraftStamp(data),
   };
 }

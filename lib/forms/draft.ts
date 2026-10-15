@@ -1,3 +1,4 @@
+import type { ITheme } from "survey-core";
 import type { MessageKey } from "../i18n/index.ts";
 import type { EmailTemplate } from "../shared/notification.ts";
 import { isObject } from "../shared/object.ts";
@@ -23,6 +24,7 @@ export type DraftStamp = { savedAt: string | null; savedBy: string | null };
 export type FormDraft = {
   schema: DraftSchema;
   emailTemplate: EmailTemplate;
+  theme: ITheme | null;
   stamp: DraftStamp;
 };
 

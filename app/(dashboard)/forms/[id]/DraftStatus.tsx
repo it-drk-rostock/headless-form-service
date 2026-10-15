@@ -6,7 +6,7 @@ import type { DraftSchema, DraftStamp, FormDraft } from "@/lib/forms/draft.ts";
 import { formatDateTime, t } from "@/lib/i18n/index.ts";
 
 /** The parts of the draft, each with its own editor and autosave. */
-export type DraftPart = "questions" | "emailTemplate";
+export type DraftPart = "questions" | "emailTemplate" | "theme";
 
 type DraftStatus = {
   /** Whether an editor has changes it has not saved yet. */

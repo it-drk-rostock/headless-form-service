@@ -200,3 +200,64 @@ describe("file and signature questions", () => {
     ).toHaveLength(1);
   });
 });
+it("saves a custom theme independently of questions and the email template", async () => {
+  const theme = {
+    themeName: "default",
+    cssVariables: { "--sjs-primary-backcolor": "#123456" },
+  };
+  await commitAs(
+    db,
+    { userId: max },
+    "update public.forms set draft_theme = $2 where id = $1",
+    [form, theme],
+  );
+  expect((await draft()).draft_updated_by).toBe(max);
+  await commitAs(db, { userId: max }, SAVE, [form, QUESTIONS]);
+  await commitAs(
+    db,
+    { userId: max },
+    "update public.forms set draft_email_template = jsonb_set(draft_email_template, '{subject}', '\"Theme test\"') where id = $1",
+    [form],
+  );
+  const [saved] = await queryAs<{
+    draft_theme: unknown;
+    draft_schema: unknown;
+    draft_email_template: unknown;
+    draft_updated_by: string;
+  }>(
+    db,
+    { userId: max },
+    "select draft_theme, draft_schema, draft_email_template, draft_updated_by from public.forms where id = $1",
+    [form],
+  );
+  expect(saved.draft_theme).toEqual(theme);
+  expect(saved.draft_schema).toEqual(QUESTIONS);
+  expect(saved.draft_email_template).toMatchObject({
+    mode: "standard",
+    subject: "Theme test",
+  });
+  expect(saved.draft_updated_by).toBe(max);
+});
+
+it("defaults to inheritance, clears an override, and restricts theme writes to the owning team", async () => {
+  const read = () =>
+    queryAs<{ draft_theme: unknown }>(
+      db,
+      { userId: max },
+      "select draft_theme from public.forms where id = $1",
+      [form],
+    );
+  expect((await read())[0].draft_theme).toBeNull();
+  const save =
+    "update public.forms set draft_theme = $2 where id = $1 returning id";
+  expect(await queryAs(db, { userId: bea }, save, [form, {}])).toEqual([]);
+  await expect(queryAs(db, "anon", save, [form, {}])).rejects.toThrow(
+    /permission denied/,
+  );
+  await commitAs(db, { userId: root }, save, [form, { themeName: "default" }]);
+  await commitAs(db, { userId: max }, save, [form, null]);
+  expect((await read())[0].draft_theme).toBeNull();
+  await expect(
+    queryAs(db, { userId: max }, save, [form, "[]"]),
+  ).rejects.toThrow(/check constraint/);
+});

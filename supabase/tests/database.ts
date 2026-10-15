@@ -34,13 +34,13 @@ const SUPABASE_STUB = `
   grant execute on function auth.uid() to anon, authenticated, service_role;
 `;
 
-/** A fresh in-memory database with every migration in `supabase/migrations/` applied. */
-export async function migratedDatabase(): Promise<PGlite> {
+/** A fresh migrated database; `before` stops before a migration for upgrade tests. */
+export async function migratedDatabase(before?: string): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(SUPABASE_STUB);
   const dir = join(supabaseDir, "migrations");
   for (const file of readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
+    .filter((f) => f.endsWith(".sql") && (before === undefined || f < before))
     .sort()) {
     await db.exec(readFileSync(join(dir, file), "utf8"));
   }

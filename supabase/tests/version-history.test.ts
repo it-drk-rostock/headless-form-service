@@ -257,3 +257,31 @@ describe("discarding changes", () => {
     );
   });
 });
+
+it("restores custom and inheriting choices into the draft and discards to the current choice", async () => {
+  const theme = { cssVariables: { "--sjs-primary-backcolor": "#123456" } };
+  await saveDraft(FIRST, FIRST_TEMPLATE);
+  await publish();
+  await commitAs(
+    db,
+    { userId: max },
+    "update public.forms set draft_theme = $2 where id = $1",
+    [form, theme],
+  );
+  await publish();
+  const read = async () =>
+    (
+      await queryAs<{ draft_theme: unknown }>(
+        db,
+        { userId: max },
+        "select draft_theme from public.forms where id = $1",
+        [form],
+      )
+    )[0].draft_theme;
+  await commitAs(db, { userId: max }, RESTORE, [form, 1]);
+  expect(await read()).toBeNull();
+  await commitAs(db, { userId: max }, DISCARD, [form]);
+  expect(await read()).toEqual(theme);
+  await commitAs(db, { userId: max }, RESTORE, [form, 2]);
+  expect(await read()).toEqual(theme);
+});

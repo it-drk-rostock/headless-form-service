@@ -1,7 +1,9 @@
 // Asks `/load-form` (blueprint §4.1) for a form's current version and sorts
 // every answer into something the embed can show. Web-standard APIs only, so
 // Vitest tests it in Node with a fake `fetch`.
+import type { ITheme } from "survey-core";
 import { FORM_PASS_PARAM } from "../lib/shared/form-pass.ts";
+import { isObject } from "../lib/shared/object.ts";
 
 export type LoadFailure =
   | "not_found"
@@ -14,6 +16,7 @@ export type LoadResult =
       kind: "ready";
       version: number;
       schema: object;
+      theme: ITheme | null;
       /** Set when the form has Turnstile on: the widget's public key. */
       turnstileSiteKey: string | null;
     }
@@ -56,6 +59,7 @@ export async function loadForm(
         kind: "ready",
         version: body.version,
         schema: body.schema,
+        theme: "theme" in body && isObject(body.theme) ? body.theme : null,
         turnstileSiteKey:
           "turnstile_site_key" in body &&
           typeof body.turnstile_site_key === "string"
