@@ -17,7 +17,7 @@ The service-only `load_form` boundary resolves the published custom theme, then 
 - Database permissions test passed after first failing before implementation.
 - Version lifecycle test passed for dynamic inheritance, custom precedence, draft isolation, restore/discard, clearing, and unchanged inherited snapshots.
 - Public load-handler and embed-load contract suites passed: 58 tests.
-- The first full-suite attempt encountered missing Vitest temporary module files in the sandbox. A subsequent run outside the sandbox is recorded below.
+- Full suite outside the sandbox (`node node_modules/vitest/vitest.mjs run --maxWorkers=2`): 1,038 passed, 4 failed across 69 files. All four failures are unchanged `n8n-form-passes.test.ts` cases whose fixed expiry is now past, failing `form_passes_expires_at_check`; the same failures were documented for ticket 01. All changed feature suites passed. Earlier sandbox attempts encountered missing Vitest temporary module files and were not reliable full-suite results.
 - Security advisor attempted against local Supabase, but no database is listening on port 54322. Migrations were exercised through migrated PGlite databases. No shared database or edge deployment was performed.
 
 ## Browser limitation
