@@ -109,6 +109,11 @@ export const de = {
   "forms.viewStatistics": "Statistik",
   "forms.viewFailures": "Fehler",
   "settings.globalTheme": "Globales Formulardesign (SurveyJS JSON)",
+  "audit.action.settingsThemeChanged": "Globales Formulardesign geändert",
+  "audit.summary.settingsThemeCleared":
+    "Das globale Formulardesign wurde entfernt.",
+  "audit.summary.settingsThemeSaved":
+    "Das globale Formulardesign wurde gespeichert.",
   "settings.globalThemeHint":
     "Gilt beim nächsten Laden für Formulare ohne eigenes Design. Leer lassen und speichern, um das Standarddesign zu verwenden.",
   "settings.clearTheme": "Design entfernen",

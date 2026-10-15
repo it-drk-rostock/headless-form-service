@@ -154,6 +154,15 @@ const actions: Record<
     label: t("audit.action.settingsOriginsChanged"),
     summary: (d) => listChanges(texts(d.from), texts(d.to)),
   },
+  "settings.theme_changed": {
+    label: t("audit.action.settingsThemeChanged"),
+    summary: (d) =>
+      t(
+        d.to === null
+          ? "audit.summary.settingsThemeCleared"
+          : "audit.summary.settingsThemeSaved",
+      ),
+  },
   "settings.recipient_domains_changed": {
     label: t("audit.action.settingsRecipientDomainsChanged"),
     summary: (d) => listChanges(texts(d.from), texts(d.to)),
