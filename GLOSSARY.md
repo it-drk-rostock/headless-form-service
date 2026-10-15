@@ -28,10 +28,10 @@ A named questionnaire owned by a team, together with the rules for how its submi
 _Avoid_: Survey, questionnaire (in code and docs)
 
 **Draft**:
-The single, editable working copy of a form's questions and email template, which visitors never see.
+The single, editable working copy of a form's questions, email template, and theme choice, which visitors never see.
 
 **Form Version**:
-An immutable, numbered snapshot of a form's questions and email template, created by publishing the draft.
+An immutable, numbered snapshot of a form's questions, email template, and theme choice, created by publishing the draft.
 _Avoid_: Revision, schema (when meaning the whole snapshot)
 
 **Current Version**:
@@ -40,6 +40,12 @@ _Avoid_: Active version, live version
 
 **Publishing**:
 Freezing the draft into a new form version and making it the current version.
+
+**Global Theme**:
+The default appearance managed by Super Admins for all forms that have no custom form theme. Without a global theme, those forms use the standard SurveyJS appearance.
+
+**Form Theme**:
+A custom appearance belonging to an individual form that takes precedence over the global theme.
 
 **Restoring**:
 Copying an earlier form version back into the draft so it can be published again as a new version.
