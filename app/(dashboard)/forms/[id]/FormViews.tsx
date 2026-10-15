@@ -11,6 +11,7 @@ const labels: Record<FormView, MessageKey> = {
   email: "forms.viewEmail",
   versions: "forms.viewVersions",
   settings: "forms.viewSettings",
+  embed: "forms.viewEmbed",
   passes: "forms.viewPasses",
   statistics: "forms.viewStatistics",
   failures: "forms.viewFailures",

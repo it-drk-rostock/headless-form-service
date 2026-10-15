@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { PGlite } from "@electric-sql/pglite";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -17,6 +18,13 @@ let anna: string; // Team Admin of Erste Hilfe
 const READ =
   "select allowed_origins, load_rate_limit, submit_rate_limit from public.settings";
 const UPDATE_ORIGINS = "update public.settings set allowed_origins = $1";
+const RESTORE_SETTINGS = readFileSync(
+  new URL(
+    "../migrations/20261015075716_restore_missing_settings.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 beforeEach(async () => {
   db = await migratedDatabase();
@@ -48,6 +56,46 @@ async function entries() {
   );
   return rows;
 }
+
+describe("repairing a missing settings row", () => {
+  it("restores settings visible to a Super Admin without exposing them to members", async () => {
+    await db.exec("delete from public.settings");
+    await db.exec(RESTORE_SETTINGS);
+
+    expect(
+      await queryAs(
+        db,
+        { userId: root },
+        "select allowed_origins, allowed_recipient_domains, load_rate_limit, submit_rate_limit from public.settings",
+      ),
+    ).toEqual([
+      {
+        allowed_origins: ["http://localhost:3000"],
+        allowed_recipient_domains: ["drk-rostock.de"],
+        load_rate_limit: 60,
+        submit_rate_limit: 3,
+      },
+    ]);
+    expect(await queryAs(db, { userId: anna }, READ)).toEqual([]);
+  });
+
+  it("preserves existing settings when run again", async () => {
+    await commitAs(
+      db,
+      { userId: root },
+      `update public.settings set allowed_origins = '{https://example.com}',
+       allowed_recipient_domains = '{example.com}',
+       load_rate_limit = 120, submit_rate_limit = 5`,
+    );
+    const before = await db.query("select * from public.settings");
+    await db.exec(RESTORE_SETTINGS);
+    await db.exec(RESTORE_SETTINGS);
+    expect((await db.query("select * from public.settings")).rows).toEqual(
+      before.rows,
+    );
+    expect(await entries()).toHaveLength(4);
+  });
+});
 
 describe("who may read and change the settings", () => {
   it("lets Super Admins read them", async () => {

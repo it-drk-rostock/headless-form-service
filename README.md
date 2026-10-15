@@ -341,6 +341,8 @@ The *Statistik* view of `/forms/[id]` (`?view=statistics&period=1|7|30|90`, defa
 
 ### Embedding forms
 
+The form's **Embed** tab provides this code with its form ID and the dashboard's current origin, a copy button, and the configured form page link. Open the deployed dashboard to copy a script address reachable by visitors.
+
 Editors paste this into a TYPO3 HTML content element (blueprint §6):
 
 ```html

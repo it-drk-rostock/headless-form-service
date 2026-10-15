@@ -27,6 +27,7 @@ import { DiscardButton } from "./DraftReset.tsx";
 import { DraftStatusProvider } from "./DraftStatus.tsx";
 import { EmailTemplateEditor } from "./EmailTemplateEditor.tsx";
 import { FormDesigner } from "./FormDesigner.tsx";
+import { FormEmbed } from "./FormEmbed.tsx";
 import { FormLifecycle } from "./FormLifecycle.tsx";
 import { FormPasses } from "./FormPasses.tsx";
 import { FormSettings } from "./FormSettings.tsx";
@@ -46,7 +47,7 @@ export async function generateMetadata({
  * A form: the designer and the email editor on its draft, its version
  * history, its settings, its form passes, its statistics and its delivery
  * failures (`?view=email`, `?view=versions`, `?view=settings`,
- * `?view=passes`, `?view=statistics` with `&period=`, `?view=failures`),
+ * `?view=embed`, `?view=passes`, `?view=statistics` with `&period=`, `?view=failures`),
  * with the version visitors see above all of them and *Veröffentlichen* and
  * *Änderungen verwerfen* next to the draft's editors. Forms of teams the
  * person does not belong to are not found (RLS); every member of the owning
@@ -181,6 +182,13 @@ export default async function FormPage({
                 canDelete={profile.isSuperAdmin}
               />
             </>
+          ),
+          embed: (
+            <FormEmbed
+              formId={form.id}
+              pageUrl={form.pageUrl}
+              accessType={form.accessType}
+            />
           ),
           passes: (
             <FormPasses

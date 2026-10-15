@@ -89,6 +89,22 @@ export const de = {
   "forms.viewEmail": "E-Mail",
   "forms.viewVersions": "Versionen",
   "forms.viewSettings": "Einstellungen",
+  "forms.viewEmbed": "Embed",
+  "forms.embedTitle": "Formular einbetten",
+  "forms.embedHint":
+    "Diesen Code als HTML-Inhalt auf der Formularseite einfügen. Er zeigt immer die aktuell veröffentlichte Version.",
+  "forms.embedSnippet": "HTML-Code",
+  "forms.embedCopy": "Code kopieren",
+  "forms.embedCopied": "Kopiert",
+  "forms.embedPage": "Formularseite",
+  "forms.embedNoPage":
+    "Noch keine Formularseite hinterlegt. Die Adresse kann in den Einstellungen eingetragen werden.",
+  "forms.embedOriginHint":
+    "Der Ursprung der Formularseite muss in den globalen Einstellungen erlaubt sein. Das Skript muss unter der angegebenen Dashboard-Adresse öffentlich erreichbar sein.",
+  "forms.embedPublicHint":
+    "Dieses Formular ist öffentlich. Die Formularseite kann ohne Pass geteilt werden.",
+  "forms.embedProtectedHint":
+    "Dieses Formular ist geschützt. Besucher benötigen einen Link mit gültigem Pass aus dem Tab „Pässe“.",
   "forms.viewPasses": "Pässe",
   "forms.viewStatistics": "Statistik",
   "forms.viewFailures": "Fehler",

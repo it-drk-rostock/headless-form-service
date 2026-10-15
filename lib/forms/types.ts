@@ -65,6 +65,7 @@ export const FORM_VIEWS = [
   "email",
   "versions",
   "settings",
+  "embed",
   "passes",
   "statistics",
   "failures",
