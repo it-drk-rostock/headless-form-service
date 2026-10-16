@@ -354,10 +354,10 @@ const FONT = "Arial,Helvetica,sans-serif";
 
 /**
  * The DRK Rostock-branded Standard Layout around a body, its placeholders
- * left to fill (blueprint §5.2): a red header, the body on a white card, and
+ * left to fill (blueprint §5.2): the official logo and black heading, a white body, and
  * a footer. Tables and inline styles, so mail clients render it alike; at
- * most 640px wide, narrower on phones. No emblem: only official logo files
- * may be used (ui-design §7). Laid out over lines, as a Custom HTML Template
+ * most 640px wide, narrower on phones. Uses the official logo file
+ * (ui-design §7). Laid out over lines, as a Custom HTML Template
  * starts from it.
  */
 export function standardLayoutHtml(body: string): string {
@@ -383,7 +383,10 @@ export function standardLayoutHtml(body: string): string {
 <body style="margin:0;padding:0;background:#f1f3f5">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f3f5"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #dee2e6;border-collapse:separate">
-<tr><td style="background:#E60005;padding:16px 24px;font-family:${FONT};font-size:18px;font-weight:bold;color:#ffffff">DRK Rostock</td></tr>
+<tr><td style="padding:24px 24px 0;font-family:${FONT};color:#000000">
+<img src="https://www.drk-rostock.de/fileadmin/intranet/logo.svg" alt="Deutsches Rotes Kreuz" width="160" style="display:block;width:160px;max-width:100%;height:auto;border:0">
+<div style="margin-top:14px;padding-bottom:10px;border-bottom:1px solid #000000;font-size:20px;line-height:1.3;font-weight:bold;color:#000000">DRK Kreisverband Rostock e.V.</div>
+</td></tr>
 <tr><td class="inhalt" style="padding:24px;font-family:${FONT};font-size:15px;line-height:1.5;color:#1a1a1a">
 ${content}
 </td></tr>
