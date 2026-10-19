@@ -1,8 +1,8 @@
 "use client";
 
 import { SegmentedControl } from "@mantine/core";
-import { useRouter } from "next/navigation";
-import type { FormsFilter } from "@/lib/forms/types.ts";
+import { useRouter, useSearchParams } from "next/navigation";
+import { type FormsFilter, formsListHref } from "@/lib/forms/types.ts";
 import { t } from "@/lib/i18n/index.ts";
 
 /**
@@ -11,12 +11,18 @@ import { t } from "@/lib/i18n/index.ts";
  */
 export function FormsFilterControl({ filter }: { filter: FormsFilter }) {
   const router = useRouter();
+  const search = useSearchParams();
   return (
     <SegmentedControl
       size="xs"
       value={filter}
       onChange={(value) =>
-        router.push(value === "archived" ? "/forms?filter=archived" : "/forms")
+        router.push(
+          formsListHref(
+            value === "archived" ? "archived" : "active",
+            search.get("team"),
+          ),
+        )
       }
       data={[
         { value: "active", label: t("forms.filterActive") },

@@ -40,6 +40,12 @@ describe("toCurrentVersion", () => {
     version: 3,
     changelog: "Neue Frage",
     created_at: "2026-10-05T12:00:00Z",
+    email_template: {
+      mode: "standard",
+      subject: "Subject",
+      body: "Body",
+    } as const,
+    theme: null,
     schema: {
       elements: [
         { type: "text", name: "vorname" },
@@ -60,6 +66,11 @@ describe("toCurrentVersion", () => {
       publishedAt: "2026-10-05T12:00:00Z",
       publishedBy: "Max Muster",
       emailQuestions: [{ name: "email", title: "E-Mail" }],
+      content: {
+        schema: row.schema,
+        emailTemplate: row.email_template,
+        theme: null,
+      },
     });
     expect(
       toCurrentVersion({

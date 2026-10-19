@@ -2,13 +2,22 @@
 
 import { Text } from "@mantine/core";
 import { createContext, useContext, useState } from "react";
-import type { DraftSchema, DraftStamp, FormDraft } from "@/lib/forms/draft.ts";
+import {
+  type DraftContent,
+  type DraftSchema,
+  type DraftStamp,
+  type FormDraft,
+  hasUnpublishedChanges,
+} from "@/lib/forms/draft.ts";
 import { formatDateTime, t } from "@/lib/i18n/index.ts";
 
 /** The parts of the draft, each with its own editor and autosave. */
 export type DraftPart = "questions" | "emailTemplate" | "theme";
 
 type DraftStatus = {
+  unpublished: boolean;
+  setEmailTemplate: (template: DraftContent["emailTemplate"]) => void;
+  setTheme: (theme: DraftContent["theme"]) => void;
   /** Whether an editor has changes it has not saved yet. */
   unsaved: boolean;
   setUnsaved: (part: DraftPart, unsaved: boolean) => void;
@@ -28,6 +37,9 @@ type DraftStatus = {
 };
 
 const DraftStatusContext = createContext<DraftStatus>({
+  unpublished: false,
+  setEmailTemplate: () => {},
+  setTheme: () => {},
   unsaved: false,
   setUnsaved: () => {},
   schema: {},
@@ -45,19 +57,23 @@ const DraftStatusContext = createContext<DraftStatus>({
  * designer saved last, and both editors reopen on a restored draft.
  */
 export function DraftStatusProvider({
-  initialSchema,
-  initialStamp,
+  initialDraft,
+  published,
   children,
 }: {
-  initialSchema: DraftSchema;
-  initialStamp: DraftStamp;
+  initialDraft: FormDraft;
+  published: DraftContent | null;
   children: React.ReactNode;
 }) {
   const [unsavedParts, setUnsavedParts] = useState<Set<DraftPart>>(
     () => new Set(),
   );
-  const [schema, setSchema] = useState(initialSchema);
-  const [stamp, setStamp] = useState(initialStamp);
+  const [schema, setSchema] = useState(initialDraft.schema);
+  const [emailTemplate, setEmailTemplate] = useState(
+    initialDraft.emailTemplate,
+  );
+  const [theme, setTheme] = useState(initialDraft.theme);
+  const [stamp, setStamp] = useState(initialDraft.stamp);
   const [reset, setReset] = useState<DraftStatus["reset"]>({
     resetCount: 0,
     draft: null,
@@ -65,6 +81,8 @@ export function DraftStatusProvider({
 
   function resetDraft(draft: FormDraft) {
     setSchema(draft.schema);
+    setEmailTemplate(draft.emailTemplate);
+    setTheme(draft.theme);
     setStamp(draft.stamp);
     setReset(({ resetCount }) => ({ resetCount: resetCount + 1, draft }));
   }
@@ -83,6 +101,12 @@ export function DraftStatusProvider({
   return (
     <DraftStatusContext
       value={{
+        unpublished: hasUnpublishedChanges(
+          { schema, emailTemplate, theme },
+          published,
+        ),
+        setEmailTemplate,
+        setTheme,
         unsaved: unsavedParts.size > 0,
         setUnsaved,
         schema,

@@ -21,6 +21,8 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { formsFilter, formsListHref } from "@/lib/forms/types.ts";
 import { t } from "@/lib/i18n/index.ts";
 import classes from "./DashboardShell.module.css";
 import type { ModuleId, ShellTeam } from "./navigation.ts";
@@ -39,6 +41,9 @@ export function ModuleSidebar({
   /** Called when an item is clicked, so the narrow-screen drawer can close. */
   onNavigate?: () => void;
 }) {
+  const search = useSearchParams();
+  const filter = formsFilter(search.get("filter") ?? undefined);
+  const teamId = search.get("team");
   return (
     <Box className={classes.sidebar}>
       <Group
@@ -86,7 +91,8 @@ export function ModuleSidebar({
           />
         ) : (
           <SidebarItem
-            href="/forms"
+            href={formsListHref(filter)}
+            active={pathname === "/forms" && !teamId}
             label={t("nav.allForms")}
             icon={<IconFiles size={16} stroke={1.5} />}
             pathname={pathname}
@@ -98,7 +104,16 @@ export function ModuleSidebar({
             teams.map((team) => (
               <SidebarItem
                 key={team.id}
-                href={`/teams/${team.id}`}
+                href={
+                  activeId === "forms"
+                    ? formsListHref(filter, team.id)
+                    : `/teams/${team.id}`
+                }
+                active={
+                  activeId === "forms"
+                    ? pathname === "/forms" && teamId === team.id
+                    : undefined
+                }
                 label={team.name}
                 icon={<IconUsersGroup size={16} stroke={1.5} />}
                 pathname={pathname}
@@ -121,15 +136,16 @@ function SidebarItem({
   label,
   icon,
   pathname,
+  active = pathname === href,
   onClick,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
   pathname: string;
+  active?: boolean;
   onClick?: () => void;
 }) {
-  const active = pathname === href;
   return (
     <NavLink
       component={Link}

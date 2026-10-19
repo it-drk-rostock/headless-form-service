@@ -15,14 +15,20 @@ export const metadata: Metadata = { title: t("forms.title") };
 
 /**
  * The forms of all the person's teams (all teams for a Super Admin): those
- * in use, or with `?filter=archived` the archived ones.
+ * in use, or with `?filter=archived` the archived ones. `?team=` narrows
+ * either list to the selected team.
  */
 export default async function FormsPage({ searchParams }: PageProps<"/forms">) {
-  const filter = formsFilter((await searchParams).filter);
-  const [teams, forms] = await Promise.all([
+  const search = await searchParams;
+  const filter = formsFilter(search.filter);
+  const teamId = typeof search.team === "string" ? search.team : null;
+  const [teams, allForms] = await Promise.all([
     listMyTeams(),
     listMyForms(filter),
   ]);
+  const forms = teamId
+    ? allForms.filter((form) => form.teamId === teamId)
+    : allForms;
 
   return (
     <ContentPanel

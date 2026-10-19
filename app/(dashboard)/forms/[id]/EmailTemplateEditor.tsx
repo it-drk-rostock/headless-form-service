@@ -114,7 +114,7 @@ function TemplateEditor({
   initialTemplate: EmailTemplate;
   passPlaceholders: string[] | null;
 }) {
-  const { schema, setStamp, setUnsaved } = useDraftStatus();
+  const { schema, setStamp, setUnsaved, setEmailTemplate } = useDraftStatus();
   const [mode, setMode] = useState(initialTemplate.mode);
   const [subject, setSubject] = useState(initialTemplate.subject);
   const [body, setBody] = useState(initialTemplate.body);
@@ -163,11 +163,13 @@ function TemplateEditor({
 
   async function save() {
     const changesAtSave = changes.current.made;
-    const saved = await saveEmailTemplate(formId, latest.current).catch(
+    const saving = latest.current;
+    const saved = await saveEmailTemplate(formId, saving).catch(
       (): DraftSaveResult => ({ error: "forms.errorGeneric" }),
     );
     setResult(saved);
     if (saved.error === null) {
+      setEmailTemplate(saving);
       changes.current.saved = Math.max(changes.current.saved, changesAtSave);
       setStamp(saved.stamp);
       setUnsaved("emailTemplate", changes.current.made > changes.current.saved);

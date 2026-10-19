@@ -59,6 +59,18 @@ export function formsFilter(param: string | string[] | undefined): FormsFilter {
   return param === "archived" ? "archived" : "active";
 }
 
+/** A shareable forms list, retaining archive and team filters together. */
+export function formsListHref(
+  filter: FormsFilter,
+  teamId?: string | null,
+): string {
+  const params = new URLSearchParams();
+  if (filter === "archived") params.set("filter", filter);
+  if (teamId) params.set("team", teamId);
+  const query = params.toString();
+  return query ? `/forms?${query}` : "/forms";
+}
+
 /** The views of a form's page; the first, the designer, is the default. */
 export const FORM_VIEWS = [
   "designer",

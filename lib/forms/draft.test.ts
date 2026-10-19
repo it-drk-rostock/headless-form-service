@@ -1,5 +1,87 @@
 import { describe, expect, it } from "vitest";
-import { draftSchemaProblem, toDraftStamp } from "./draft.ts";
+import {
+  type DraftContent,
+  draftSchemaProblem,
+  hasUnpublishedChanges,
+  toDraftStamp,
+} from "./draft.ts";
+
+describe("hasUnpublishedChanges", () => {
+  const published: DraftContent = {
+    schema: {
+      elements: [
+        { type: "text", name: "first" },
+        { type: "text", name: "second" },
+      ],
+    },
+    emailTemplate: { mode: "standard", subject: "Subject", body: "Body" },
+    theme: null,
+  };
+
+  it("allows a first publication and detects existing unpublished edits", () => {
+    expect(hasUnpublishedChanges(published, null)).toBe(true);
+    expect(
+      hasUnpublishedChanges(
+        { ...published, schema: { title: "Changed" } },
+        published,
+      ),
+    ).toBe(true);
+    expect(
+      hasUnpublishedChanges(
+        {
+          ...published,
+          emailTemplate: { ...published.emailTemplate, body: "Changed" },
+        },
+        published,
+      ),
+    ).toBe(true);
+    expect(
+      hasUnpublishedChanges(
+        { ...published, theme: { themeName: "custom" } },
+        published,
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores JSON object key order, including nested questions", () => {
+    const reordered = {
+      ...published,
+      schema: {
+        elements: [
+          { name: "first", type: "text" },
+          { name: "second", type: "text" },
+        ],
+      },
+    };
+    expect(hasUnpublishedChanges(reordered, published)).toBe(false);
+  });
+
+  it("detects question reordering and removed properties", () => {
+    expect(
+      hasUnpublishedChanges(
+        {
+          ...published,
+          schema: {
+            elements: [
+              { type: "text", name: "second" },
+              { type: "text", name: "first" },
+            ],
+          },
+        },
+        published,
+      ),
+    ).toBe(true);
+    expect(hasUnpublishedChanges({ ...published, schema: {} }, published)).toBe(
+      true,
+    );
+  });
+
+  it("returns to unchanged when edits are undone, discarded, or just published", () => {
+    expect(hasUnpublishedChanges(structuredClone(published), published)).toBe(
+      false,
+    );
+  });
+});
 
 const page = (...elements: unknown[]) => ({
   pages: [{ name: "seite1", elements }],

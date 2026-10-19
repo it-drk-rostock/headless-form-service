@@ -1,6 +1,7 @@
 import type { MessageKey } from "../i18n/index.ts";
 import { type EmailQuestion, emailQuestions } from "../shared/notification.ts";
 import { type ProfileNameRow, profileName } from "../shared/profile.ts";
+import type { DraftContent } from "./draft.ts";
 
 /** Same limit as the `form_versions_changelog_check` constraint in the database. */
 export const CHANGELOG_MAX_LENGTH = 2000;
@@ -52,15 +53,28 @@ export function toFormVersion(row: FormVersionRow): FormVersion {
 
 /** The current version of a published form. */
 export type CurrentVersion = FormVersion & {
+  content: DraftContent;
   /** The version's email questions, which can be the Reply-To question. */
   emailQuestions: EmailQuestion[];
 };
 
 /** The columns behind a `CurrentVersion`. */
-export const CURRENT_VERSION_COLUMNS = `${FORM_VERSION_COLUMNS}, schema`;
+export const CURRENT_VERSION_COLUMNS = `${FORM_VERSION_COLUMNS}, schema, email_template, theme`;
 
-export type CurrentVersionRow = FormVersionRow & { schema: unknown };
+export type CurrentVersionRow = FormVersionRow & {
+  schema: DraftContent["schema"];
+  email_template: DraftContent["emailTemplate"];
+  theme: DraftContent["theme"];
+};
 
 export function toCurrentVersion(row: CurrentVersionRow): CurrentVersion {
-  return { ...toFormVersion(row), emailQuestions: emailQuestions(row.schema) };
+  return {
+    ...toFormVersion(row),
+    emailQuestions: emailQuestions(row.schema),
+    content: {
+      schema: row.schema,
+      emailTemplate: row.email_template,
+      theme: row.theme,
+    },
+  };
 }

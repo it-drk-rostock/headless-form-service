@@ -61,7 +61,7 @@ export default function DraftCreator({
   const [themeFailed, setThemeFailed] = useState(false);
   const themeQueue = useRef(Promise.resolve());
   // Only state setters, so they work from Creator's callbacks set up once.
-  const { setUnsaved, setSchema } = useDraftStatus();
+  const { setUnsaved, setSchema, setTheme } = useDraftStatus();
 
   const [creator] = useState(() => {
     const creator = new SurveyCreator({
@@ -146,6 +146,7 @@ export default function DraftCreator({
         (): DraftSaveResult => ({ error: "forms.errorGeneric" }),
       );
       if (result.error === null) {
+        setTheme(value);
         themeChanges.current.saved = revision;
         setUnsaved("theme", themeChanges.current.made > revision);
       }

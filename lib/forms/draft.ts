@@ -28,6 +28,37 @@ export type FormDraft = {
   stamp: DraftStamp;
 };
 
+export type DraftContent = Pick<
+  FormDraft,
+  "schema" | "emailTemplate" | "theme"
+>;
+
+/** Compare JSON content, ignoring object key order but preserving question order. */
+export function hasUnpublishedChanges(
+  draft: DraftContent,
+  published: DraftContent | null,
+): boolean {
+  return published === null || !sameJson(draft, published);
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((value, i) => sameJson(value, right[i]))
+    );
+  }
+  if (!isObject(left) || !isObject(right)) return false;
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every(
+      (key) => Object.hasOwn(right, key) && sameJson(left[key], right[key]),
+    )
+  );
+}
+
 /** The columns behind a `DraftStamp`; the editor's profile through its foreign key. */
 export const DRAFT_STAMP_COLUMNS =
   "created_at, draft_updated_at, editor:profiles!forms_draft_updated_by_fkey(full_name, email)";

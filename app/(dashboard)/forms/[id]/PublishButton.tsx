@@ -36,6 +36,7 @@ export function PublishButton({
   hasRecipients: boolean;
 }) {
   const [opened, setOpened] = useState(false);
+  const { unsaved, unpublished } = useDraftStatus();
   // Bumped on every opening, so each starts with an empty dialog.
   const [opening, setOpening] = useState(0);
   const close = () => setOpened(false);
@@ -44,6 +45,7 @@ export function PublishButton({
     <>
       <Button
         size="xs"
+        disabled={unsaved || !unpublished}
         onClick={() => {
           setOpening(opening + 1);
           setOpened(true);
@@ -85,7 +87,7 @@ function PublishDialog({
   const [result, setResult] = useState<PublishResult | null>(null);
   const [pending, startTransition] = useTransition();
   // The designer saves shortly after each change; publishing waits for it.
-  const { unsaved } = useDraftStatus();
+  const { unsaved, unpublished } = useDraftStatus();
 
   function publish() {
     startTransition(async () => {
@@ -153,7 +155,11 @@ function PublishDialog({
         <Button variant="default" onClick={onClose}>
           {t("forms.cancel")}
         </Button>
-        <Button onClick={publish} loading={pending} disabled={unsaved}>
+        <Button
+          onClick={publish}
+          loading={pending}
+          disabled={unsaved || !unpublished}
+        >
           {t("forms.publishSubmit")}
         </Button>
       </Group>

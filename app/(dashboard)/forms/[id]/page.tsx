@@ -94,8 +94,8 @@ export default async function FormPage({
 
   return (
     <DraftStatusProvider
-      initialSchema={draft.schema}
-      initialStamp={draft.stamp}
+      initialDraft={draft}
+      published={current?.content ?? null}
     >
       <FormViews
         title={form.name}
