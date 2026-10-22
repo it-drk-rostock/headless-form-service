@@ -3,7 +3,7 @@ export const de = {
   "app.title": "Formular-Service",
   "app.description": "Formulare gestalten, einbetten und als E-Mail empfangen",
   "app.logoTile": "DRK",
-  "org.name": "DRK Rostock",
+  "org.name": "DRK Kreisverband Rostock e.V.",
 
   "nav.forms": "Formulare",
   "nav.teams": "Teams",
@@ -91,12 +91,17 @@ export const de = {
   "forms.viewSettings": "Einstellungen",
   "forms.viewEmbed": "Embed",
   "forms.embedTitle": "Formular einbetten",
+  "forms.hostedPage": "Formularseite im Formular-Service",
+  "forms.hostedHint":
+    "Dieses Formular kann auch direkt im Formular-Service ausgefüllt werden. Die App-Adresse muss in den erlaubten Ursprüngen stehen; bei Turnstile muss auch der App-Hostname freigegeben sein. Für geschützte Formulare diese Adresse als Formularseite speichern und einen Pass-Link erstellen.",
+  "forms.hostedNoScript":
+    "Bitte JavaScript aktivieren, um dieses Formular auszufüllen.",
   "forms.embedHint":
     "Diesen Code als HTML-Inhalt auf der Formularseite einfügen. Er zeigt immer die aktuell veröffentlichte Version.",
   "forms.embedSnippet": "HTML-Code",
   "forms.embedCopy": "Code kopieren",
   "forms.embedCopied": "Kopiert",
-  "forms.embedPage": "Formularseite",
+  "forms.embedPage": "Externe Formularseite",
   "forms.embedNoPage":
     "Noch keine Formularseite hinterlegt. Die Adresse kann in den Einstellungen eingetragen werden.",
   "forms.embedOriginHint":

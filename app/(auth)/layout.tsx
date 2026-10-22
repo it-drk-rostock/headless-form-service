@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
     <Center mih="100dvh" bg="gray.0" p="md">
       <Stack w="100%" maw={380} gap="md">
         <Stack align="center" gap="xs">
-          <LogoTile />
+          <LogoTile full />
           <Text fw={600}>{t("app.title")}</Text>
         </Stack>
         <Paper withBorder radius="md" p="lg">

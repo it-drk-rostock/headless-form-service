@@ -7,6 +7,7 @@ import {
 } from "@mantine/core";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { branding } from "@/lib/branding.ts";
 import { locale, t } from "@/lib/i18n/index.ts";
 import { theme } from "./theme.ts";
 
@@ -18,6 +19,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: { default: t("app.title"), template: `%s · ${t("app.title")}` },
   description: t("app.description"),
+  icons: { icon: branding.favicon },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

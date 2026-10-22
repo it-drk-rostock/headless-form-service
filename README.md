@@ -1,5 +1,30 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Branding and direct form pages
+
+The app uses the DRK shell icon, full logo and favicon at the supplied
+`https://www.drk-rostock.de/fileadmin/intranet/` URLs. These assets require
+that server to be reachable. `NEXT_PUBLIC_APP_LOGO_WIDTH=150` and
+`NEXT_PUBLIC_APP_LOGO_HEIGHT=48` control the full logo dimensions at build time.
+The company name is DRK Kreisverband Rostock e.V.
+
+Visitors can fill in a published form at `/submission/<form-id>` without a
+dashboard account. The form's Embed tab shows the configured external form page
+alongside the direct link at `https://drk-rostock-formulare.de/submission/<form-id>`.
+This page
+uses the existing embed and public edge functions, including the current form
+version, themes, closed/archived handling, form passes and bot protection.
+It does not display stored submissions.
+
+Before sharing, add the app's origin (scheme and hostname, with port if needed)
+to **Allowed origins** in global settings. If Turnstile is enabled, also allow
+the app's hostname in that widget's Cloudflare configuration. For a protected
+form, save the direct URL as its **Formularseite**, then create a form pass;
+the generated link will include `?form_pass=<secret>`. Existing pass secrets
+also work on the direct page when supplied through that parameter. Unpublished
+and archived forms remain unavailable. The direct page prevents caching and
+referrer disclosure and asks search engines not to index it.
+
 ## Backend
 
 There is one cloud Supabase project for development and production ([ADR-0006](docs/adr/0006-single-cloud-environment.md)): every migration and function deploy goes to the live system.

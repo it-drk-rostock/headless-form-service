@@ -33,6 +33,7 @@ export function FormEmbed({
   const snippet = origin
     ? `<div data-form="${formId}"></div>\n<script src="${origin}/embed.js" defer></script>`
     : "";
+  const hostedUrl = `https://drk-rostock-formulare.de/submission/${formId}`;
 
   return (
     <Stack mt={40} gap="md" maw={800}>
@@ -93,6 +94,23 @@ export function FormEmbed({
             {t("forms.embedNoPage")}
           </Text>
         )}
+      </Stack>
+      <Stack gap={4} align="flex-start">
+        <Text fz={13} fw={500}>
+          {t("forms.hostedPage")}
+        </Text>
+        <Anchor
+          href={hostedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          fz={13}
+          style={{ overflowWrap: "anywhere" }}
+        >
+          {hostedUrl}
+        </Anchor>
+        <Text fz={13} c="gray.6">
+          {t("forms.hostedHint")}
+        </Text>
       </Stack>
       <Text fz={13}>
         {t(

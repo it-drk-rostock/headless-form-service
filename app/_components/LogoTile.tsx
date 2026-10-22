@@ -1,14 +1,17 @@
-import { Box, Text } from "@mantine/core";
+import Image from "next/image";
+import { branding } from "@/lib/branding.ts";
 import { t } from "@/lib/i18n/index.ts";
 import classes from "./LogoTile.module.css";
 
-/** Red app tile with "DRK" until the official logo files arrive (docs/ui-design.md §7). */
-export function LogoTile() {
+export function LogoTile({ full = false }: { full?: boolean }) {
   return (
-    <Box className={classes.tile}>
-      <Text c="white" fw={600} fz={11}>
-        {t("app.logoTile")}
-      </Text>
-    </Box>
+    <Image
+      src={full ? branding.logo : branding.shellIcon}
+      alt={t("org.name")}
+      width={full ? branding.logoWidth : 36}
+      height={full ? branding.logoHeight : 36}
+      className={classes.logo}
+      unoptimized
+    />
   );
 }

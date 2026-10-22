@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { authRedirect, safeNextPath } from "./routing.ts";
 
 describe("authRedirect", () => {
+  it("allows hosted forms without login, including form-pass links", () => {
+    expect(
+      authRedirect({
+        path: "/submission/123?form_pass=secret",
+        signedIn: false,
+      }),
+    ).toBeNull();
+    expect(authRedirect({ path: "/submissionx/123", signedIn: false })).toBe(
+      "/login?next=%2Fsubmissionx%2F123",
+    );
+  });
   it("sends signed-out visitors of a dashboard page to the login page, remembering where they wanted to go", () => {
     expect(authRedirect({ path: "/forms", signedIn: false })).toBe(
       "/login?next=%2Fforms",

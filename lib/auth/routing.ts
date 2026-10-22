@@ -7,8 +7,8 @@ export const SIGN_OUT_PATH = "/auth/signout";
 /** Stand-in origin for resolving relative paths. */
 const BASE = "http://dashboard.invalid";
 
-/** Reachable without a session: the login page and the handler for invite and set-password links. */
-const PUBLIC_PREFIXES = [LOGIN_PATH, "/auth"];
+/** Login, invite/set-password handlers, and visitor-facing form pages. */
+const PUBLIC_PREFIXES = [LOGIN_PATH, "/auth", "/submission"];
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some(
