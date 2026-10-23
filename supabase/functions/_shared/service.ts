@@ -5,7 +5,13 @@ import {
   createClient,
   type SupabaseClient,
 } from "npm:@supabase/supabase-js@2.117.2";
+import type { PassContext } from "../../../lib/shared/pass-context.ts";
+import { decryptPassContext } from "./pass-context.ts";
 import type { PublicEndpointSettings } from "./rate-limit.ts";
+import type {
+  EncryptedSubmission,
+  SubmissionKeys,
+} from "./submission-crypto.ts";
 
 /**
  * A client with the project's secret key, which the runtime injects as a JSON
@@ -54,4 +60,27 @@ export async function readEndpointSettings(
 export function dispatchEmailUrl(): string {
   return new URL("/functions/v1/dispatch-email", Deno.env.get("SUPABASE_URL"))
     .href;
+}
+
+/** Missing passes fail closed; legacy passes have a null context. */
+export async function loadStoredPassContext(
+  supabase: SupabaseClient,
+  keys: SubmissionKeys,
+  formId: string,
+  passId: string,
+): Promise<PassContext | null> {
+  const { data, error } = await supabase
+    .from("form_passes")
+    .select("token_hash, encrypted_context")
+    .eq("form_id", formId)
+    .eq("id", passId)
+    .maybeSingle<{
+      token_hash: string;
+      encrypted_context: EncryptedSubmission | null;
+    }>();
+  if (error) throw error;
+  if (!data) throw new Error("Form pass context unavailable");
+  return data.encrypted_context
+    ? decryptPassContext(keys, formId, data.token_hash, data.encrypted_context)
+    : null;
 }

@@ -3,6 +3,7 @@
 // answers are decrypted only to render the notification email, which goes to
 // the form's recipients through Mailjet; nothing of them is stored or logged.
 // After QStash's last retry its failure callback comes here too (§4.5).
+
 import type { PassMetadata } from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import {
@@ -12,6 +13,10 @@ import {
   replyToAddress,
   senderName,
 } from "../../../lib/shared/notification.ts";
+import {
+  enforcePassFields,
+  type PassContext,
+} from "../../../lib/shared/pass-context.ts";
 import { splitByAllowedDomain } from "../../../lib/shared/recipient-domains.ts";
 import type { Mail } from "../_shared/mailjet.ts";
 import {
@@ -80,6 +85,10 @@ export type DispatchEmailDeps = {
     formId: string,
     passId: string,
   ) => Promise<PassMetadata | null>;
+  loadPassContext: (
+    formId: string,
+    passId: string,
+  ) => Promise<PassContext | null>;
   /** Throws when Mailjet did not accept the email. */
   send: (mail: Mail) => Promise<void>;
   markSent: (submissionId: string) => Promise<void>;
@@ -154,14 +163,25 @@ async function dispatch(
     return reply({ error: "submission_unreadable" }, 422);
   }
 
-  if (submission.recipients.length === 0) {
+  const context = payload.pass_id
+    ? await deps.loadPassContext(ids.formId, payload.pass_id)
+    : null;
+  if (context) {
+    const enforced = enforcePassFields(payload.answers, context);
+    if (enforced === null) return reply({ error: "answers_invalid" }, 422);
+    payload.answers = enforced;
+  }
+  const addresses = context?.recipient
+    ? [context.recipient]
+    : submission.recipients;
+  if (addresses.length === 0) {
     console.error(`dispatch-email: form ${ids.formId} has no recipients`);
     return reply({ error: "no_recipients" }, 422);
   }
   // The dashboard and the database refuse other recipients, but the list may
   // have shrunk since the form was saved (defence in depth, ticket 21).
   const recipients = splitByAllowedDomain(
-    submission.recipients,
+    addresses,
     submission.allowedRecipientDomains,
   );
   if (recipients.refused.length > 0) {

@@ -15,7 +15,7 @@ let member: string;
 let form: string;
 
 const HASH = "b".repeat(64);
-const EXPIRES = "2026-10-10T12:00:00.000Z";
+const EXPIRES = new Date(Date.now() + 48 * 3_600_000).toISOString();
 const CREATE =
   "select public.create_n8n_form_pass($1, $2, $3, $4, $5) as page_url";
 
@@ -136,5 +136,89 @@ describe("create_n8n_form_pass", () => {
         queryAs(db, who, CREATE, [form, HASH, 1, EXPIRES, "{}"]),
       ).rejects.toMatchObject({ code: "42501" });
     }
+  });
+});
+
+const PERSONALIZED =
+  "select public.create_personalized_n8n_form_pass($1, $2, $3, $4, $5, $6) as page_url";
+const ENVELOPE = {
+  v: 1,
+  kid: "test",
+  iv: "encrypted-iv",
+  ct: "encrypted-payload",
+};
+
+describe("personalized n8n pass persistence", () => {
+  it("atomically stores encrypted context and hides it from dashboard members", async () => {
+    await commitAs(db, "service", PERSONALIZED, [
+      form,
+      HASH,
+      1,
+      EXPIRES,
+      "{}",
+      JSON.stringify(ENVELOPE),
+    ]);
+    const rows = await commitAs<{ encrypted_context: unknown }>(
+      db,
+      "service",
+      "select encrypted_context from public.form_passes where form_id = $1",
+      [form],
+    );
+    expect(rows[0].encrypted_context).toEqual(ENVELOPE);
+    expect(
+      await queryAs(
+        db,
+        { userId: member },
+        "select metadata from public.form_passes",
+      ),
+    ).toEqual([{ metadata: {} }]);
+    await expect(
+      queryAs(
+        db,
+        { userId: member },
+        "select encrypted_context from public.form_passes",
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
+    await expect(
+      queryAs(db, "anon", "select encrypted_context from public.form_passes"),
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+  it("refuses public callers and malformed envelopes without leaving a pass", async () => {
+    for (const who of ["anon", { userId: member }] as const) {
+      await expect(
+        queryAs(db, who, PERSONALIZED, [
+          form,
+          HASH,
+          1,
+          EXPIRES,
+          "{}",
+          JSON.stringify(ENVELOPE),
+        ]),
+      ).rejects.toMatchObject({ code: "42501" });
+    }
+    await expect(
+      commitAs(db, "service", PERSONALIZED, [
+        form,
+        HASH,
+        1,
+        EXPIRES,
+        "{}",
+        "{}",
+      ]),
+    ).rejects.toMatchObject({ code: "22023" });
+    expect(
+      (await db.query("select * from public.form_passes")).rows,
+    ).toHaveLength(0);
+  });
+  it("prevents a member from updating encrypted context", async () => {
+    await create();
+    await expect(
+      queryAs(
+        db,
+        { userId: member },
+        "update public.form_passes set encrypted_context = $1",
+        [JSON.stringify(ENVELOPE)],
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
   });
 });

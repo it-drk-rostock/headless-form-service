@@ -288,3 +288,55 @@ describe("handleGenerateFormPass", () => {
     expect(await response.json()).toEqual({ error: "internal_error" });
   });
 });
+
+describe("personalized pass requests", () => {
+  it("accepts dynamic metadata alongside encrypted-context input with default locks", async () => {
+    const { deps, created } = fakes();
+    const response = await handleGenerateFormPass(
+      post({
+        form_id: FORM,
+        metadata: { ticket: "T-42" },
+        prefill: { email: "max@drk-rostock.de" },
+        recipient: "kurse@drk-rostock.de",
+      }),
+      deps,
+    );
+    expect(response.status).toBe(201);
+    expect(created[0]).toMatchObject({
+      metadata: { ticket: "T-42" },
+      context: {
+        prefill: { email: "max@drk-rostock.de" },
+        locked_fields: ["email"],
+        recipient: "kurse@drk-rostock.de",
+      },
+    });
+    expect(JSON.stringify(await response.json())).not.toContain(
+      "max@drk-rostock.de",
+    );
+  });
+  it("rejects a lock without a corresponding initial value", async () => {
+    const { deps, created } = fakes();
+    expect(
+      (
+        await handleGenerateFormPass(
+          post({ form_id: FORM, locked_fields: ["email"] }),
+          deps,
+        )
+      ).status,
+    ).toBe(400);
+    expect(created).toHaveLength(0);
+  });
+  it.each([
+    "prefill_invalid",
+    "recipient_not_allowed",
+  ] as const)("reports %s before issuing a link", async (failure) => {
+    const { deps } = fakes();
+    deps.createPass = async () => failure;
+    const response = await handleGenerateFormPass(
+      post({ form_id: FORM, recipient: "kurse@drk-rostock.de" }),
+      deps,
+    );
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: failure });
+  });
+});

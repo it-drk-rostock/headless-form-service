@@ -5,6 +5,7 @@ import { createRateLimiter } from "../_shared/redis.ts";
 import {
   createServiceClient,
   dispatchEmailUrl,
+  loadStoredPassContext,
   readEndpointSettings,
 } from "../_shared/service.ts";
 import {
@@ -63,6 +64,8 @@ Deno.serve((request) =>
             isClosed: data.is_closed,
           };
     },
+    loadPassContext: (formId, passId) =>
+      loadStoredPassContext(supabase, keys, formId, passId),
     verifyTurnstile,
     claimPass: async ({ formId, submissionId }, tokenHash) => {
       const { data, error } = await supabase

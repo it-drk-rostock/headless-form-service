@@ -225,6 +225,8 @@ A protected form is filled in only with a form pass: a secret in the link `<form
 
 ### Form passes from n8n
 
+For dynamic metadata, encrypted personal prefill, server-enforced locked fields, pass-specific recipients, and the n8n HTTP request setup, see [Personalized form links from n8n](docs/n8n-form-passes.md).
+
 n8n creates form passes with `POST /functions/v1/generate-form-pass` (`supabase/functions/generate-form-pass/`, blueprint §7). It authenticates with one global key, `Authorization: Bearer <N8N_INTEGRATION_KEY>`, never with the secret key (ADR-0005). The function has `verify_jwt = false` and checks the key itself; a missing or wrong key gets 401 `unauthorized`.
 
 - The body is JSON `{ form_id, max_uses?, expires_in_hours?, metadata? }`. `max_uses` defaults to 1, `null` means unlimited, at most 10000. `expires_in_hours` defaults to 48, at most 8760 (a year); every n8n pass expires. `metadata` follows the same rules as in the dashboard. Anything else, including unknown fields, gets 400 `{ error: "request_invalid", field }`.

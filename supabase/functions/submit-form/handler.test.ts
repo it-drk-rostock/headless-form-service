@@ -74,6 +74,7 @@ function fakes(
       verified.push({ token, ip });
       return token === TOKEN;
     },
+    loadPassContext: async () => null,
     claimPass: async () => null,
     finishPass: async () => {},
     // Like `queue_submission`: false only once QStash's message ID is kept.
@@ -1117,5 +1118,57 @@ describe("handleSubmitForm", () => {
     expect(await response.json()).toEqual({ error: "internal_error" });
     expect(response.headers.get("access-control-allow-origin")).toBe(ORIGIN);
     expect(published).toEqual([]);
+  });
+});
+
+describe("pass-bound answers", () => {
+  it("rejects client changes without consuming a pass use", async () => {
+    const { deps, published, pass } = await protectedFakes();
+    deps.loadPassContext = async () => ({
+      prefill: { email: "max@drk-rostock.de" },
+      locked_fields: ["email"],
+      recipient: "kurse@drk-rostock.de",
+    });
+    const response = await handleSubmitForm(
+      post(
+        body({
+          form_pass: PASS_SECRET,
+          answers: { vorname: "Max", email: "attacker@example.org" },
+        }),
+      ),
+      deps,
+    );
+    expect(response.status).toBe(422);
+    expect(published).toHaveLength(0);
+    expect(pass.useCount).toBe(0);
+  });
+  it("restores omitted locked answers and allows editable values", async () => {
+    const { deps, published } = await protectedFakes();
+    deps.loadPassContext = async () => ({
+      prefill: { email: "max@drk-rostock.de", vorname: "Max" },
+      locked_fields: ["email"],
+      recipient: null,
+    });
+    const response = await handleSubmitForm(
+      post(body({ form_pass: PASS_SECRET, answers: { vorname: "Moritz" } })),
+      deps,
+    );
+    expect(response.status).toBe(202);
+    expect((await decrypted(published[0])).answers).toEqual({
+      vorname: "Moritz",
+      email: "max@drk-rostock.de",
+    });
+  });
+  it("fails closed and releases the claim when context cannot be decrypted", async () => {
+    const { deps, published, pass } = await protectedFakes();
+    deps.loadPassContext = async () => {
+      throw new Error("unavailable key");
+    };
+    expect(
+      (await handleSubmitForm(post(body({ form_pass: PASS_SECRET })), deps))
+        .status,
+    ).toBe(500);
+    expect(published).toHaveLength(0);
+    expect(pass.useCount).toBe(0);
   });
 });

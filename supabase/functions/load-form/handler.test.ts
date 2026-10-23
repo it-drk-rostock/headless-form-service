@@ -569,3 +569,38 @@ describe("handleLoadForm", () => {
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
   });
 });
+
+describe("personalized form loads", () => {
+  it("returns prefill and locks only after validation and never exposes routing", async () => {
+    const { deps, passes } = fakes({
+      [FORM]: {
+        version: 1,
+        schema: SCHEMA,
+        theme: null,
+        accessType: "protected",
+        turnstileEnabled: false,
+        isClosed: false,
+      },
+    });
+    passes[PASS_HASH].context = {
+      prefill: { vorname: "Max" },
+      locked_fields: ["vorname"],
+      recipient: "private@drk-rostock.de",
+    };
+    const response = await handleLoadForm(
+      get(`?form_id=${FORM}&form_pass=${PASS}`),
+      deps,
+    );
+    expect(response.status).toBe(200);
+    const loaded = await response.json();
+    expect(loaded.prefill).toEqual({ vorname: "Max" });
+    expect(loaded.locked_fields).toEqual(["vorname"]);
+    expect(JSON.stringify(loaded)).not.toContain("private@drk-rostock.de");
+    const refused = await handleLoadForm(
+      get(`?form_id=${FORM}&form_pass=wrong`),
+      deps,
+    );
+    expect(refused.status).toBe(403);
+    expect(JSON.stringify(await refused.json())).not.toContain("Max");
+  });
+});

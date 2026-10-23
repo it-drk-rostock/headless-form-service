@@ -8,6 +8,7 @@ import {
   hashFormPassSecret,
 } from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
+import type { PassContext } from "../../../lib/shared/pass-context.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
 import { allowedMethods, withCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -46,12 +47,13 @@ export type LoadFormDeps = {
   turnstileSiteKey: string;
 };
 
-/** Only the fields needed to validate a pass; no secret or metadata. */
+/** Validation fields and optional decrypted prefill context; no secret. */
 export type LoadedFormPass = {
   max_uses: number | null;
   use_count: number;
   expires_at: string | null;
   revoked_at: string | null;
+  context?: PassContext | null;
 };
 
 const METHODS = ["GET"];
@@ -100,6 +102,7 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
   // anyway, so there is nothing to protect. Not counted as a load.
   if (form.isClosed) return reply({ state: "closed" });
 
+  let context: PassContext | null = null;
   if (form.accessType === "protected") {
     const secret = params.get(FORM_PASS_PARAM);
     const pass = secret
@@ -114,6 +117,7 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
     ) {
       return reply({ error: "form_pass_invalid" }, 403);
     }
+    context = pass.context ?? null;
   }
 
   // The count is only for statistics, so a failure there must not keep the
@@ -124,6 +128,9 @@ async function serve(request: Request, deps: LoadFormDeps): Promise<Response> {
     console.error("load-form could not count the load", error);
   }
   return reply({
+    ...(context
+      ? { prefill: context.prefill, locked_fields: context.locked_fields }
+      : {}),
     version: form.version,
     schema: form.schema,
     theme: form.theme ?? null,

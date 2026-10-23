@@ -16,6 +16,8 @@ export type LoadResult =
       kind: "ready";
       version: number;
       schema: object;
+      prefill?: Record<string, unknown>;
+      lockedFields?: string[];
       theme: ITheme | null;
       /** Set when the form has Turnstile on: the widget's public key. */
       turnstileSiteKey: string | null;
@@ -59,6 +61,16 @@ export async function loadForm(
         kind: "ready",
         version: body.version,
         schema: body.schema,
+        ...("prefill" in body && isObject(body.prefill)
+          ? { prefill: body.prefill }
+          : {}),
+        ...("locked_fields" in body && Array.isArray(body.locked_fields)
+          ? {
+              lockedFields: body.locked_fields.filter(
+                (key): key is string => typeof key === "string",
+              ),
+            }
+          : {}),
         theme: "theme" in body && isObject(body.theme) ? body.theme : null,
         turnstileSiteKey:
           "turnstile_site_key" in body &&

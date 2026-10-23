@@ -86,6 +86,12 @@ Permanently invalidating a form pass before it is used up or expires.
 **Pass Metadata**:
 Non-personal context attached to a form pass (e.g. a ticket or campaign ID) that is carried into the notification email.
 
+**Pass Prefill**:
+Initial answers attached to a form pass, used to populate questions when its holder opens the form. Individual answers can be editable or locked.
+
+**Locked Field**:
+A question whose answer is fixed by its form pass and cannot be changed by the visitor.
+
 ## Submissions & Delivery
 
 **Submission**:
@@ -100,7 +106,7 @@ _Avoid_: Queued (in user-facing text), delivered
 The email that delivers one submission to the form's recipients.
 
 **Recipient**:
-A fixed email address configured on a form that receives its notification emails.
+An email address that receives a form's notification emails, configured on the form or supplied by a form pass. A pass-specific recipient replaces the form's fixed recipients for that submission.
 _Avoid_: Team inbox
 
 **Reply-To Field**:

@@ -121,6 +121,7 @@ function fakes(
       failures.push({ submissionId: requested.submissionId, reason });
       return failure;
     },
+    loadPassContext: async () => null,
     senderEmail: SENDER_EMAIL,
   };
   return { deps, sent, statuses, passes, passLoads, failures };
@@ -765,5 +766,56 @@ describe("handleDispatchEmail, failure callback", () => {
     expect(await response.json()).toEqual({ error: "request_invalid" });
     expect(failures).toEqual([]);
     expect(sent).toEqual([]);
+  });
+});
+
+describe("pass-specific delivery", () => {
+  it("uses the stored pass recipient even if the client submits routing fields", async () => {
+    const { deps, sent } = fakes({ recipients: [] });
+    deps.loadPassContext = async () => ({
+      prefill: { email: "max@drk-rostock.de" },
+      locked_fields: ["email"],
+      recipient: "personal@drk-rostock.de",
+    });
+    const response = await handleDispatchEmail(
+      deliver(
+        await message(
+          { recipient: "attacker@example.org", vorname: "Max" },
+          PASS,
+        ),
+      ),
+      deps,
+    );
+    expect(response.status).toBe(200);
+    expect(sent[0].to).toEqual(["personal@drk-rostock.de"]);
+    expect(sent[0].html).toContain("max@drk-rostock.de");
+  });
+  it("refuses changed locked values again at delivery", async () => {
+    const { deps, sent } = fakes();
+    deps.loadPassContext = async () => ({
+      prefill: { email: "max@drk-rostock.de" },
+      locked_fields: ["email"],
+      recipient: null,
+    });
+    const response = await handleDispatchEmail(
+      deliver(await message({ email: "attacker@example.org" }, PASS)),
+      deps,
+    );
+    expect(response.status).toBe(422);
+    expect(sent).toHaveLength(0);
+  });
+  it("rechecks allowed domains and never falls back to fixed recipients", async () => {
+    const { deps, sent } = fakes();
+    deps.loadPassContext = async () => ({
+      prefill: {},
+      locked_fields: [],
+      recipient: "max@elsewhere.example",
+    });
+    const response = await handleDispatchEmail(
+      deliver(await message({}, PASS)),
+      deps,
+    );
+    expect(response.status).toBe(422);
+    expect(sent).toHaveLength(0);
   });
 });

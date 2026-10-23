@@ -208,3 +208,24 @@ describe("loadForm", () => {
     });
   });
 });
+
+it("preserves prefill and lock rules returned by the load endpoint", async () => {
+  const result = await loadForm(FORM, {
+    endpoint: ENDPOINT,
+    fetch: async () =>
+      new Response(
+        JSON.stringify({
+          version: 1,
+          schema: {},
+          prefill: { email: "max@example.org" },
+          locked_fields: ["email"],
+        }),
+        { status: 200 },
+      ),
+  });
+  expect(result).toMatchObject({
+    kind: "ready",
+    prefill: { email: "max@example.org" },
+    lockedFields: ["email"],
+  });
+});

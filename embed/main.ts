@@ -97,6 +97,11 @@ async function mount(element: HTMLElement): Promise<void> {
     model.applyTheme(result.theme ?? DefaultLight);
     // Answers to questions a visitor hid again are not sent.
     model.clearInvisibleValues = "onHidden";
+    model.data = result.prefill ?? {};
+    for (const question of model.getAllQuestions()) {
+      if (result.lockedFields?.includes(question.valueName || question.name))
+        question.readOnly = true;
+    }
 
     const surveyHost = document.createElement("div");
     const turnstileHost = document.createElement("div");

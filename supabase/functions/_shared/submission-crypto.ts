@@ -178,7 +178,7 @@ function associatedData({ submissionId, formId, version }: SubmissionIds) {
   );
 }
 
-function toBase64(bytes: Uint8Array): string {
+export function toBase64(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);

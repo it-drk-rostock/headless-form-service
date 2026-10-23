@@ -3,7 +3,11 @@
 import { Receiver } from "npm:@upstash/qstash@2.12.0";
 import type { PassMetadata } from "../../../lib/shared/form-pass.ts";
 import { createMailjetSender } from "../_shared/mailjet.ts";
-import { createServiceClient, dispatchEmailUrl } from "../_shared/service.ts";
+import {
+  createServiceClient,
+  dispatchEmailUrl,
+  loadStoredPassContext,
+} from "../_shared/service.ts";
 import {
   decryptSubmission,
   parseEncryptionKeys,
@@ -89,6 +93,8 @@ Deno.serve((request) =>
       if (error) throw error;
       return data?.metadata ?? null;
     },
+    loadPassContext: (formId, passId) =>
+      loadStoredPassContext(supabase, keys, formId, passId),
     send,
     markSent: async (submissionId) => {
       const { error } = await supabase.rpc("mark_submission_sent", {

@@ -2,11 +2,17 @@
 // to send a submission. Records it in `form_stats` and queues its answers,
 // encrypted, in QStash, from where `/dispatch-email` delivers them. Answers
 // are stored nowhere on the way.
+
 import { answerProblems } from "../../../lib/shared/answer-validation.ts";
 import { type Answers, pickAnswers } from "../../../lib/shared/answers.ts";
 import { hashFormPassSecret } from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isObject } from "../../../lib/shared/object.ts";
+import {
+  enforcePassFields,
+  type PassContext,
+  prefillFitsSchema,
+} from "../../../lib/shared/pass-context.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
 import { allowedMethods, withCorsHeaders } from "../_shared/cors.ts";
 import {
@@ -54,6 +60,10 @@ export type SubmitFormDeps = {
   claimPass: (ids: SubmissionIds, tokenHash: string) => Promise<string | null>;
   /** Finishes this attempt; retries of one submission share one reserved use. */
   finishPass: (submissionId: string, accepted: boolean) => Promise<void>;
+  loadPassContext: (
+    formId: string,
+    passId: string,
+  ) => Promise<PassContext | null>;
   /**
    * Writes the `queued` stats row. False once QStash's message ID is recorded
    * for that ID: a retry of a submission QStash already has.
@@ -140,20 +150,31 @@ async function submit(
     if (refused) return refused;
   }
 
-  const picked = pickAnswers(form.schema, answers);
-  const problems = answerProblems(form.schema, picked);
-  if (problems.length > 0) {
-    // Keys only, never the answers. The embed validates first, so this is a
-    // hand-made request or an embed out of step with the server.
-    console.warn("submit-form refused invalid answers", ids.formId, problems);
-    return reply({ error: "answers_invalid" }, 422);
-  }
-
   let passId: string | null = null;
   if (form.accessType === "protected") {
     if (formPass === "") return reply({ error: "form_pass_invalid" }, 403);
     passId = await deps.claimPass(ids, await hashFormPassSecret(formPass));
     if (passId === null) return reply({ error: "form_pass_invalid" }, 403);
+  }
+
+  let picked: Answers;
+  try {
+    const context = passId
+      ? await deps.loadPassContext(ids.formId, passId)
+      : null;
+    const enforced = context ? enforcePassFields(answers, context) : answers;
+    picked = pickAnswers(form.schema, enforced ?? {});
+    if (
+      (context && !prefillFitsSchema(form.schema, context)) ||
+      enforced === null ||
+      answerProblems(form.schema, picked).length > 0
+    ) {
+      await finishClaim(passId, ids.submissionId, false, deps);
+      return reply({ error: "answers_invalid" }, 422);
+    }
+  } catch (error) {
+    await finishClaim(passId, ids.submissionId, false, deps);
+    throw error;
   }
 
   let encrypted: EncryptedSubmission;

@@ -16,6 +16,10 @@ import {
 } from "../../../lib/shared/form-pass.ts";
 import { noStoreJsonResponse as reply } from "../../../lib/shared/http.ts";
 import { isObject } from "../../../lib/shared/object.ts";
+import {
+  type PassContext,
+  parsePassContext,
+} from "../../../lib/shared/pass-context.ts";
 import { isUuid } from "../../../lib/shared/uuid.ts";
 
 /** A pass to store, with the secret's hash only. */
@@ -26,13 +30,16 @@ export type NewFormPass = {
   maxUses: number | null;
   expiresAt: string;
   metadata: PassMetadata;
+  context?: PassContext;
 };
 
 /** The stored pass's form page (null when unset), or why it was refused. */
 export type CreatedFormPass =
   | { pageUrl: string | null }
   | "form_not_found"
-  | "form_not_protected";
+  | "form_not_protected"
+  | "prefill_invalid"
+  | "recipient_not_allowed";
 
 export type GenerateFormPassDeps = {
   /** `N8N_INTEGRATION_KEY`, the Bearer key n8n sends. */
@@ -43,7 +50,15 @@ export type GenerateFormPassDeps = {
 };
 
 /** The request body's keys (blueprint §7); others are refused. */
-const REQUEST_FIELDS = ["form_id", "max_uses", "expires_in_hours", "metadata"];
+const REQUEST_FIELDS = [
+  "form_id",
+  "max_uses",
+  "expires_in_hours",
+  "metadata",
+  "prefill",
+  "locked_fields",
+  "recipient",
+];
 
 export async function handleGenerateFormPass(
   request: Request,
@@ -79,7 +94,10 @@ export async function handleGenerateFormPass(
       maxUses: input.maxUses,
       expiresAt,
       metadata: input.metadata,
+      ...(input.context ? { context: input.context } : {}),
     });
+    if (created === "prefill_invalid" || created === "recipient_not_allowed")
+      return reply({ error: created }, 422);
     if (created === "form_not_found") {
       return reply({ error: "form_not_found" }, 404);
     }
@@ -136,6 +154,7 @@ type ParsedInput =
       maxUses: number | null;
       expiresInHours: number;
       metadata: PassMetadata;
+      context?: PassContext;
     }
   /** The field that is missing, unknown or invalid; null for no JSON object. */
   | { invalid: string | null };
@@ -177,7 +196,14 @@ function parseInput(text: string): ParsedInput {
   const metadata = body.metadata === undefined ? {} : body.metadata;
   if (passMetadataProblem(metadata) !== null) return { invalid: "metadata" };
 
+  const hasContext = ["prefill", "locked_fields", "recipient"].some((key) =>
+    Object.hasOwn(body, key),
+  );
+  const context = hasContext ? parsePassContext(body) : undefined;
+  if (context === null) return { invalid: "pass_context" };
+
   return {
+    ...(context ? { context } : {}),
     formId,
     maxUses,
     expiresInHours,
